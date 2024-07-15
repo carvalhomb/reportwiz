@@ -1,0 +1,10 @@
+chainlit==0.7.700
+langchain==0.2.5
+langchain_community==0.2.5
+langchain_core==0.2.9
+langchain-openai==0.1.8
+langchain_text_splitters==0.2.1
+python-dotenv==1.0.1
+qdrant-client==1.9.1
+langchain-qdrant==0.1.1
+pymupdf4llm==0.0.5
