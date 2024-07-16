@@ -1,150 +1,50 @@
-# Week 4: Tuesday
+# ReportWiz
 
-In today's assignment, we'll be creating an Open Source LLM-powered LangChain RAG Application in Chainlit.
+An Intelligent Business Reporting Assistant
 
-There are 2 main sections to this assignment:
+## Problem
 
-## Build 🏗️
+### Problem description
 
-### Build Task 1: Deploy LLM and Embedding Model to SageMaker Endpoint Through Hugging Face Inference Endpoints
+Business departments struggle to quickly retrieve information and generate reports without relying on developers and business analysts even for simple queries. At the same time, business analytics departments are overloaded with repeated requests that have already been responded to multiple times, so less time is available to produce really new, useful reports and data analyses.
 
-#### LLM Endpoint
+### Why 
 
-Select "Inference Endpoint" from the "Solutions" button in Hugging Face:
+This problem is worth solving because business departments need to access necessary information rapidly to increase their efficiency. Businesses often face delays and inefficiencies when non-technical users need simple reports but lack the skills to create SQL queries and the visualizations that they need. On the other end, business analytics departments are overloaded with such simple queries and have less time for more complex work.
 
-![image](https://i.imgur.com/6KC9TCD.png)
+### Audience
 
-Create a "+ New Endpoint" from the Inference Endpoints dashboard.
+The primary users of this product are business departments, including analysts and managers, who need timely access to data for decision-making but do not have the technical skills to write SQL queries. Their pain point is the inefficiency and delay caused by relying on developers for simple reporting tasks, which this chatbot aims to resolve.
 
-![image](https://i.imgur.com/G6Bq9KC.png)
+## Solution
 
-Select the `NousResearch/Meta-Llama-3-8B-Instruct` model repository and name your endpoint. Select N. Virginia as your region (`us-east-1`). Give your endpoint an appropriate name. Make sure to select *at least* a L4 GPU. 
+Our solution to this problem is **ReportWiz**.
 
-![image](https://i.imgur.com/X3YlUbh.png)
+**Reportwiz** is a chatbot that is connected to a repository of existing reports that have been produced, and to the in-house datamarts that contain the company's business-relevant data. It takes requests for information from business users and intelligently decides what to do. When **ReportWiz** receives a request from the user:
 
-Select the following settings for your `Advanced Configuration`.
+- If there is already a report, it points the user to the existing report;
+- If the report does not exist, it generates the required SQL code to give the requested information to the user;
+- If it is not able to generate the query, it gathers all necessary information from the user to create a structured request (i.e. JIRA ticket) that will be dispatched to the business analytics department so that a report can be produced and added to the repository.
 
-![image](https://i.imgur.com/c0HQ7g1.png)
+By enabling business users to use natural language to express what they need and retrieve the requested information (in the format of existing reports or SQL queries directly to the database), we can significantly reduce dependency on developers, streamline reporting processes, and improve overall productivity. For the business analytics department, it means less time responding to requests that have already been met and focusing their time in producing new, high quality reports when needed. For the company, it means more agile and responsive operations. For the world, it showcases the potential of AI to make data more accessible. For us, it’s a fulfilling challenge to use AI to bridge the gap between technical and non-technical users.
 
-Create a `Protected` endpoint.
+### Implementation details
 
-![image](https://i.imgur.com/Ak8kchZ.png)
+The solution will leverage Retrieval-Augmented Generation (RAG) to retrieve information  from existing reports, scripts and code, and a Large Language Model (LLM) to understand the users' requests in natural language and decide the correct outcome.
 
-If you were successful, you should see the following screen:
+The model will have access to a repository of previously generated reports, a schema of the database and sample SQL queries used to produce the types of reports that the business users typically need.
 
-![image](https://i.imgur.com/IBYG3wm.png)
+It is also relevant to note that we want the chatbot to "fail gracefully", that is, recognize when it is not able to provide responses for simple quests, and then include a human in the loop by gathering necessary details to create a request ticket for the reporting team.
 
-#### Embedding Model Endpoint
-We'll be using `Snowflake/snowflake-arctic-embed-m` for our embedding model today.
+After the first version of the implementation, we will evaluate the need for fine-tuning of embeddings and of the LLM (Large Language Model) on our business data and existing code to improve the accuracy of the chatbot and its relevance to the company's data.
 
-The process is the same as the LLM - but we'll make a few specific tweaks:
+### Success
 
-Let's make sure our set-up reflects the following screenshots:
+Success for this project means the chatbot can accurately interpret natural language queries, verify if relevant reports, scripts or code already exist, and decide the best outcome. 
 
-![image](https://i.imgur.com/IHh8FnC.png)
+The key performance indicator (KPI) will be the reduction in time business departments spend on obtaining necessary information, aiming for a 50% decrease in the average time required for report generation.
 
-After which, make sure the advanced configuration is set like so:
 
-![image](https://i.imgur.com/bbcrhUj.png)
+## Sharing
 
-> #### NOTE: PLEASE SHUTDOWN YOUR INSTANCES WHEN YOU HAVE COMPLETED THE ASSIGNMENT TO PREVENT UNESSECARY CHARGES.
-
-### Build Task 2: Create RAG Pipeline with LangChain
-
-Follow the [notebook](https://colab.research.google.com/drive/1v1FYmvKH4gsqcdZwIT9wvbQe0GUjrc9d?usp=sharing) to create a LangChain pipeline powered by Hugging Face endpoints!
-
-Once you're done - please move on to Build Task 3!
-
-### Build Task 3: Create a Chainlit Application
-
-1. Create a new empty Docker space through Hugging Face - with the following settings:
-
-![image](https://i.imgur.com/0YzyQX7.png)
-
-> NOTE: You may notice the application builds slowly (~15min.) with the default free-tier hardware. The process will be faster using the `CPU upgrade` Space Hardware - though it is not required. 
-
-2. Clone the newly created space into a directory that is *NOT IN YOUR AI MAKERSPACE REPOSITORY* using the SSH option.
-
-> NOTE: You may need to ensure you've added your SSH key to Hugging Face, as well as GitHub. This should already be done.
-
-![image](https://i.imgur.com/5RyBdP5.png)
-
-3. Copy and Paste (`cp ...` or through UI) the contents of `Week 4/Day 1` into the newly cloned repository. 
-
-> NOTE: Please keep the `README.md` that was cloned from your space and delete the class `README.md`.
-
-4. Using the `ls` command or the `tree` command verify that you have copied over: 
- - `app.py`
- - `Dockerfile`
- - `data/paul_graham_essays.txt`
- - `chainlit.md`
- - `.gitignore`
- - `.env.sample`
- - `solution_app.py`
- - `requirements.txt`
-
- Here is an example as the `ls -al` CLI command: 
-
- ![image](https://i.imgur.com/vazGYeb.png)
-
- 5. Work through the `app.py` file to migrate your LCEL LangChain RAG Chain from the Notebook to Chainlit!
-
- 6. Be sure to modify your `README.md` and `chainlit.md` as you see fit!
-
- > NOTE: If you get stuck, there is a working reference version in `solution_app.py`.
-
- 7. When you are done with local testing - push your changes to your space. 
-
- 8. Make sure you add your `HF_LLM_ENDPOINT`, `HF_EMBED_ENDPOINT`, `HF_TOKEN` as "Secrets" in your Hugging Face Space.
-
-### Terminating Your Resources
-
-Please head to the settings of each endpoint and select `Delete Endpoint`. You will need to type the name of the endpoint to delete the resources.
-
-### Deliverables
-
-- Completed Notebook
-- Chainlit Application in a Hugging Face Space Powered by Hugging Face Endpoints
-- Screenshot of endpoint usage
-
-Example Screen Shot:
-
-![image](https://i.imgur.com/qfbcVpS.png)
-
-## Ship 🚢
-
-Create a Hugging Face Space powered by Hugging Face Endpoints!
-
-### Deliverables
-
-- A short Loom of the space, and a 1min. walkthrough of the application in full
-
-## Share 🚀
-
-Make a social media post about your final application!
-
-### Deliverables
-
-- Make a post on any social media platform about what you built!
-
-Here's a template to get you started:
-
-```
-🚀 Exciting News! 🚀
-
-I am thrilled to announce that I have just built and shipped a open-source LLM-powered Retrieval Augmented Generation Application with LangChain! 🎉🤖
-
-🔍 Three Key Takeaways:
-1️⃣ 
-2️⃣ 
-3️⃣ 
-
-Let's continue pushing the boundaries of what's possible in the world of AI and question-answering. Here's to many more innovations! 🚀
-Shout out to @AIMakerspace !
-
-#LangChain #QuestionAnswering #RetrievalAugmented #Innovation #AI #TechMilestone
-
-Feel free to reach out if you're curious or would like to collaborate on similar projects! 🤝🔥
-```
-
-> #### NOTE: PLEASE SHUTDOWN YOUR INSTANCES WHEN YOU HAVE COMPLETED THE ASSIGNMENT TO PREVENT UNESSECARY CHARGES.
+We plan to share our project with the AI and business analytics communities through platforms such as GitHub, relevant LinkedIn groups, and AI-focused forums. This will allow us to receive feedback, encourage collaboration, and contribute to the broader discussion on making data access more efficient and democratized through AI.
