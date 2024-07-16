@@ -37,9 +37,25 @@ from langchain.agents.format_scratchpad.openai_tools import (
 from langchain.agents import tool, AgentExecutor
 from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputParser
 from langchain.tools import StructuredTool
+from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
+from langchain_community.tools.arxiv.tool import ArxivQueryRun
+from langgraph.graph import StateGraph, END
+
+
+from langgraph.prebuilt import ToolExecutor
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage
 
 
 
+
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+import operator
+from langchain_core.messages import BaseMessage
+
+from langgraph.prebuilt import ToolInvocation
+import json
+from langchain_core.messages import FunctionMessage
 
 
 # GLOBAL SCOPE - ENTIRE APPLICATION HAS ACCESS TO VALUES SET IN THIS SCOPE #
@@ -177,7 +193,7 @@ prompt = ChatPromptTemplate.from_messages(
 #openai_chat_model = ChatOpenAI(model="gpt-4o", streaming=True)
 
 
-llm = AzureChatOpenAI(
+model = AzureChatOpenAI(
     azure_deployment=os.environ['AZURE_OPENAI_DEPLOYMENT'],
     api_version="2024-05-01-preview",
     temperature=0,
@@ -190,46 +206,62 @@ llm = AzureChatOpenAI(
 @tool
 def get_word_length(word: str) -> int:
     """Returns the length of a word."""
-    return len(word)+5
+    response = len(word)+5
+    return response
 
 
 tool_belt = [
-    #DuckDuckGoSearchRun(),
-    #ArxivQueryRun(),
+    DuckDuckGoSearchRun(),
+    ArxivQueryRun(),
     get_word_length
 ]
 
 
-tools = [convert_to_openai_function(t) for t in tool_belt]
-
-model_with_tools = llm.bind_tools(tools)
+tool_executor = ToolExecutor(tool_belt)
 
 
-# lcel = (
-#     {
-#         "input": lambda x: x["input"],
-#         "agent_scratchpad": lambda x: format_to_openai_tool_messages(
-#             x["intermediate_steps"]
-#         ),
-#     }
-#     | prompt
-#     | model_with_tools
-#     | OpenAIToolsAgentOutputParser()
-    
-# )
+functions = [convert_to_openai_function(t) for t in tool_belt]
 
-# agent_executor = AgentExecutor(agent=agent, tools=tool_belt, verbose=True)
-from langchain_core.messages import HumanMessage
+model = model.bind_tools(functions)
 
 
-from langgraph.prebuilt import create_react_agent
+class AgentState(TypedDict):
+  messages: Annotated[list, add_messages]
 
-agent_executor = create_react_agent(model_with_tools, tools)
 
-response = agent_executor.invoke({"messages": [HumanMessage(content="How many letters in the word eudca")]})
+def call_model(state):
+  messages = state["messages"]
+  response = model.invoke(messages)
+  return {"messages" : [response]}
 
-print(response["messages"])
-print(response)
+def call_tool(state):
+  last_message = state["messages"][-1]
+
+  action = ToolInvocation(
+      tool=last_message.additional_kwargs["function_call"]["name"],
+      tool_input=json.loads(
+          last_message.additional_kwargs["function_call"]["arguments"]
+      )
+  )
+
+  response = tool_executor.invoke(action)
+
+  function_message = FunctionMessage(content=str(response), name=action.tool)
+
+  return {"messages": [function_message]}
+
+
+
+
+
+def should_continue(state):
+  last_message = state["messages"][-1]
+
+  if "function_call" not in last_message.additional_kwargs:
+    return "end"
+
+  return "continue"
+
 
 
 
@@ -248,7 +280,31 @@ def rename(original_author: str):
 
 @cl.on_chat_start
 async def start_chat():
-    cl.user_session.set("agent_executor", agent_executor)
+    workflow = StateGraph(AgentState)
+
+    workflow.add_node("agent", call_model)
+    workflow.add_node("action", call_tool)
+    workflow.set_entry_point("agent")
+
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "continue": "action",
+            "end": END
+        }
+    )
+    workflow.add_edge("action", "agent")
+
+    # initialize state
+    state = AgentState(messages=[])
+
+    app = workflow.compile()
+    cl.user_session.set("workflow", app)
+
+    workflow.get_graph().print_ascii()
+
+    cl.user_session.set("state", state)
 
 
 
@@ -256,32 +312,20 @@ async def start_chat():
 async def main(message: cl.Message):
     """
     This function will be called every time a message is received from a session.
-
-    We will use the LCEL RAG chain to generate a response to the user query.
-
-    The LCEL RAG chain is stored in the user session, and is unique to each user session - this is why we can access it here.
     """
-    agent_executor = cl.user_session.get("agent_executor")
+    workflow: Runnable = cl.user_session.get("workflow")
+    state = cl.user_session.get("state")
 
-    cb = cl.AsyncLangchainCallbackHandler(#stream_final_answer=True
-        )
-    #cb = cl.LangchainCallbackHandler()
-    myconfig = RunnableConfig(callbacks=[cb])
+    # Append the new message to the state
+    state["messages"] += [HumanMessage(content=message.content)]
 
-    msg = cl.Message(content="")
-
-    # async for chunk in agent_executor.astream(
-    #         {"query": message.content},
-    #         config=myconfig,
-    # ):
-    #     await msg.stream_token(chunk)
-
-    # await msg.send()
-
-    res = await agent_executor.ainvoke(
-        {"input": message.content}, 
-        #callbacks=[cl.AsyncLangchainCallbackHandler()]
-        config=myconfig
-    )
-
-    await cl.Message(content=res).send()
+    import pprint
+    # Stream the response to the UI
+    ui_message = cl.Message(content="")
+    await ui_message.send()
+    async for event in workflow.astream_events(state, version="v1"):
+        pprint.pprint(event)
+        if event["event"] == "on_chain_stream" and event["name"] == "agent":
+            content = event["data"]["chunk"]['messages'][0].content or ""
+            await ui_message.stream_token(token=content)
+    await ui_message.update()
