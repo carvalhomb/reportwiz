@@ -10,13 +10,16 @@ import pymupdf4llm
 
 from qdrant_client import QdrantClient
 
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 
 #from langchain_openai import ChatOpenAI
 from langchain_openai import AzureChatOpenAI,  AzureOpenAIEmbeddings
 #from langchain_openai.embeddings import OpenAIEmbeddings
 
 from langchain_community.document_loaders import TextLoader  # , PyMuPDFLoader
+from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
+from langchain_community.tools.arxiv.tool import ArxivQueryRun
+
 from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
 
 from langchain_community.vectorstores import Qdrant
@@ -24,6 +27,16 @@ from langchain_community.vectorstores import Qdrant
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema.runnable import Runnable, RunnablePassthrough
 from langchain.schema.runnable.config import RunnableConfig
+
+from langchain_core.utils.function_calling import convert_to_openai_function
+from langchain.agents.format_scratchpad.openai_tools import (
+    format_to_openai_tool_messages,
+)
+from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputParser
+from langchain.agents import AgentExecutor
+
+
+
 
 # GLOBAL SCOPE - ENTIRE APPLICATION HAS ACCESS TO VALUES SET IN THIS SCOPE #
 # ---- ENV VARIABLES ---- #
@@ -115,6 +128,9 @@ else:
 # Create the retriever
 qdrant_retriever = qdrant_vectorstore.as_retriever()
 
+
+
+
 # -- AUGMENTED -- #
 """
 1. Define a String Template
@@ -137,6 +153,18 @@ that you don't know because it is not related to the "Airbnb 10-k Filings from Q
 # CREATE PROMPT TEMPLATE
 rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
 
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are very powerful assistant, but don't know current events",
+        ),
+        ("user", "{query}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ]
+)
+
 # -- GENERATION -- #
 """
 1. Access ChatGPT API
@@ -145,7 +173,7 @@ rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
 #openai_chat_model = ChatOpenAI(model="gpt-4o", streaming=True)
 
 
-openai_chat_model = AzureChatOpenAI(
+openai_chat_model_with_tools = AzureChatOpenAI(
     azure_deployment=os.environ['AZURE_OPENAI_DEPLOYMENT'],
     api_version="2024-05-01-preview",
     temperature=0,
@@ -153,6 +181,31 @@ openai_chat_model = AzureChatOpenAI(
     timeout=None,
     max_retries=2,
 )
+
+
+tool_belt = [
+    DuckDuckGoSearchRun(),
+    ArxivQueryRun()
+]
+
+functions = [convert_to_openai_function(t) for t in tool_belt]
+model = openai_chat_model_with_tools.bind_functions(functions)
+
+
+agent = (
+    {
+        "query": lambda x: x["query"],
+        "agent_scratchpad": lambda x: format_to_openai_tool_messages(
+            x["intermediate_steps"]
+        ),
+    }
+    | prompt
+    | openai_chat_model_with_tools
+    | OpenAIToolsAgentOutputParser()
+    
+)
+
+agent_executor = AgentExecutor(agent=agent, tools=tool_belt, verbose=True)
 
 
 @cl.author_rename
@@ -170,15 +223,15 @@ def rename(original_author: str):
 
 @cl.on_chat_start
 async def start_chat():
-    lcel_rag_chain = (
-            {
-                "context": operator.itemgetter("query") | qdrant_retriever,
-                "query": operator.itemgetter("query")
-            }
-            | rag_prompt | openai_chat_model | StrOutputParser()
-    )
+    # lcel_rag_chain = (
+    #         {
+    #             "context": operator.itemgetter("query") | qdrant_retriever,
+    #             "query": operator.itemgetter("query")
+    #         }
+    #         | rag_prompt | openai_chat_model_with_tools | StrOutputParser()
+    # )
 
-    cl.user_session.set("lcel_rag_chain", lcel_rag_chain)
+    cl.user_session.set("agent_executor", agent_executor)
 
 
 @cl.on_message
@@ -190,11 +243,11 @@ async def main(message: cl.Message):
 
     The LCEL RAG chain is stored in the user session, and is unique to each user session - this is why we can access it here.
     """
-    lcel_rag_chain = cl.user_session.get("lcel_rag_chain")
+    agent_executor = cl.user_session.get("agent_executor")
 
     msg = cl.Message(content="")
 
-    async for chunk in lcel_rag_chain.astream(
+    async for chunk in agent_executor.astream(
             {"query": message.content},
             config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
     ):
