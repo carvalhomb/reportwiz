@@ -3,6 +3,7 @@ import requests
 import dotenv
 import pathlib
 import operator
+import ast
 
 import chainlit as cl
 
@@ -32,8 +33,11 @@ from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain.agents.format_scratchpad.openai_tools import (
     format_to_openai_tool_messages,
 )
+
+from langchain.agents import tool, AgentExecutor
 from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputParser
-from langchain.agents import AgentExecutor
+from langchain.tools import StructuredTool
+
 
 
 
@@ -151,16 +155,16 @@ that you don't know because it is not related to the "Airbnb 10-k Filings from Q
 """
 
 # CREATE PROMPT TEMPLATE
-rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
+#rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
 
 
 prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You are very powerful assistant, but don't know current events",
+            "You are a not very knowleadgeable  assistant. You are bad at calculating lengths of words.",
         ),
-        ("user", "{query}"),
+        ("user", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]
 )
@@ -173,7 +177,7 @@ prompt = ChatPromptTemplate.from_messages(
 #openai_chat_model = ChatOpenAI(model="gpt-4o", streaming=True)
 
 
-openai_chat_model_with_tools = AzureChatOpenAI(
+llm = AzureChatOpenAI(
     azure_deployment=os.environ['AZURE_OPENAI_DEPLOYMENT'],
     api_version="2024-05-01-preview",
     temperature=0,
@@ -183,29 +187,50 @@ openai_chat_model_with_tools = AzureChatOpenAI(
 )
 
 
+@tool
+def get_word_length(word: str) -> int:
+    """Returns the length of a word."""
+    return len(word)+5
+
+
 tool_belt = [
-    DuckDuckGoSearchRun(),
-    ArxivQueryRun()
+    #DuckDuckGoSearchRun(),
+    #ArxivQueryRun(),
+    get_word_length
 ]
 
-functions = [convert_to_openai_function(t) for t in tool_belt]
-model = openai_chat_model_with_tools.bind_functions(functions)
+
+tools = [convert_to_openai_function(t) for t in tool_belt]
+
+model_with_tools = llm.bind_tools(tools)
 
 
-agent = (
-    {
-        "query": lambda x: x["query"],
-        "agent_scratchpad": lambda x: format_to_openai_tool_messages(
-            x["intermediate_steps"]
-        ),
-    }
-    | prompt
-    | openai_chat_model_with_tools
-    | OpenAIToolsAgentOutputParser()
+# lcel = (
+#     {
+#         "input": lambda x: x["input"],
+#         "agent_scratchpad": lambda x: format_to_openai_tool_messages(
+#             x["intermediate_steps"]
+#         ),
+#     }
+#     | prompt
+#     | model_with_tools
+#     | OpenAIToolsAgentOutputParser()
     
-)
+# )
 
-agent_executor = AgentExecutor(agent=agent, tools=tool_belt, verbose=True)
+# agent_executor = AgentExecutor(agent=agent, tools=tool_belt, verbose=True)
+from langchain_core.messages import HumanMessage
+
+
+from langgraph.prebuilt import create_react_agent
+
+agent_executor = create_react_agent(model_with_tools, tools)
+
+response = agent_executor.invoke({"messages": [HumanMessage(content="How many letters in the word eudca")]})
+
+print(response["messages"])
+print(response)
+
 
 
 @cl.author_rename
@@ -223,15 +248,8 @@ def rename(original_author: str):
 
 @cl.on_chat_start
 async def start_chat():
-    # lcel_rag_chain = (
-    #         {
-    #             "context": operator.itemgetter("query") | qdrant_retriever,
-    #             "query": operator.itemgetter("query")
-    #         }
-    #         | rag_prompt | openai_chat_model_with_tools | StrOutputParser()
-    # )
-
     cl.user_session.set("agent_executor", agent_executor)
+
 
 
 @cl.on_message
@@ -245,13 +263,25 @@ async def main(message: cl.Message):
     """
     agent_executor = cl.user_session.get("agent_executor")
 
+    cb = cl.AsyncLangchainCallbackHandler(#stream_final_answer=True
+        )
+    #cb = cl.LangchainCallbackHandler()
+    myconfig = RunnableConfig(callbacks=[cb])
+
     msg = cl.Message(content="")
 
-    async for chunk in agent_executor.astream(
-            {"query": message.content},
-            config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
-    ):
-        await msg.stream_token(chunk)
+    # async for chunk in agent_executor.astream(
+    #         {"query": message.content},
+    #         config=myconfig,
+    # ):
+    #     await msg.stream_token(chunk)
 
-    await msg.send()
+    # await msg.send()
 
+    res = await agent_executor.ainvoke(
+        {"input": message.content}, 
+        #callbacks=[cl.AsyncLangchainCallbackHandler()]
+        config=myconfig
+    )
+
+    await cl.Message(content=res).send()
