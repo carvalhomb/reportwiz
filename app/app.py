@@ -1,5 +1,4 @@
 import os
-import requests
 import dotenv
 import pathlib
 import operator
@@ -65,89 +64,10 @@ This function will load our environment file (.env) if it is present.
 Our OpenAI API Key lives there and will be loaded as an env var
 here: os.environ["OPENAI_API_KEY"]
 """
-dotenv.load_dotenv()
 
-qdrant_api_key = os.environ["QDRANT_API_KEY"]
 
-# ---- GLOBAL DECLARATIONS ---- #
+
 ASSISTANT_NAME = "ReportWiz"
-SOURCE_PDF_PATH = './data/airbnb.pdf'
-SOURCE_PDF_NAME = "Airbnb 10-k Filings from Q1-2024"
-VECTORSTORE_LOCATION = os.environ['QDRANT_VECTORSTORE_LOCATION']  # ':memory:'
-VECTORSTORE_COLLECTION_NAME = 'reportwiz_store'
-
-# -- RETRIEVAL -- #
-
-# LOAD OpenAI EMBEDDINGS API object
-#embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
-embedding_model = AzureOpenAIEmbeddings(
-    #model="text-embedding-3-small",
-    azure_deployment=os.environ['AZURE_OPENAI_EMB_DEPLOYMENT'],
-    openai_api_version="2023-05-15",
-)
-
-qdrant_vectorstore = None
-
-# Let's check if the collection exists first.
-# There's an API for it: https://api.qdrant.tech/api-reference/collections/collection-exists
-# but it's not in the Python library (yet?),
-# so I'll make the REST request directly and save the result in a variable
-r = requests.get(f'{VECTORSTORE_LOCATION}/collections/{VECTORSTORE_COLLECTION_NAME}/exists',
-                 headers={'api-key': qdrant_api_key}
-                 )
-collection_exists = r.json()['result']['exists']
-# print(collection_exists)
-
-
-if not collection_exists:
-    print(f"Indexing Files into vectorstore {VECTORSTORE_COLLECTION_NAME}")
-
-    # Load docs
-    # CREATE TEXT LOADER AND LOAD DOCUMENTS
-    # documents = PyMuPDFLoader(SOURCE_PDF_PATH).load()
-
-    # convert the source PDF document to markdown, save it locally
-    md_text = pymupdf4llm.to_markdown(SOURCE_PDF_PATH)
-    md_path = SOURCE_PDF_PATH + '.md'
-    pathlib.Path(md_path).write_bytes(md_text.encode())
-
-    text_loader = TextLoader(md_path)
-    documents = text_loader.load()
-
-    # CREATE TEXT SPLITTER AND SPLIT DOCUMENTS
-    text_splitter = MarkdownTextSplitter(  # RecursiveCharacterTextSplitter(
-        chunk_size=600,
-        chunk_overlap=30,
-        # length_function = tiktoken_len,
-    )
-
-    split_documents = text_splitter.split_documents(documents)
-    # print(len(split_documents))
-
-    # INDEX FILES
-    qdrant_vectorstore = Qdrant.from_documents(
-        split_documents,
-        embedding_model,
-        location=VECTORSTORE_LOCATION,
-        collection_name=VECTORSTORE_COLLECTION_NAME,
-        prefer_grpc=True,
-        api_key=qdrant_api_key,
-    )
-
-else:
-    # Load existing collection
-    qdrant_vectorstore = Qdrant.from_existing_collection(
-        embedding_model,
-        path=None,
-        collection_name=VECTORSTORE_COLLECTION_NAME,
-        url=VECTORSTORE_LOCATION,
-        prefer_grpc=True,
-        api_key=qdrant_api_key,
-    )
-
-# Create the retriever
-qdrant_retriever = qdrant_vectorstore.as_retriever()
-
 
 
 
@@ -157,18 +77,18 @@ qdrant_retriever = qdrant_vectorstore.as_retriever()
 2. Create a Prompt Template from the String Template
 """
 ### 1. DEFINE STRING TEMPLATE
-RAG_PROMPT = """
-CONTEXT:
-{context}
+# RAG_PROMPT = """
+# CONTEXT:
+# {context}
 
-QUERY:
-{query}
+# QUERY:
+# {query}
 
-Use the provide context to answer the provided user query. 
-Only use the provided context to answer the query. 
-If the query is unrelated to the context given, you should apologize and answer 
-that you don't know because it is not related to the "Airbnb 10-k Filings from Q1, 2024" document.
-"""
+# Use the provide context to answer the provided user query. 
+# Only use the provided context to answer the query. 
+# If the query is unrelated to the context given, you should apologize and answer 
+# that you don't know because it is not related to the "Airbnb 10-k Filings from Q1, 2024" document.
+# """
 
 # CREATE PROMPT TEMPLATE
 #rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
