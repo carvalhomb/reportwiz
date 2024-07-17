@@ -85,76 +85,64 @@ async def main(msg: cl.Message):
     """
     This function will be called every time a message is received from a session.
     """
-    #graph: Runnable = cl.user_session.get("graph")
 
-        # When a message is received, get the agent and message history from session
-    app = cl.user_session.get("graph")
-    inputs = cl.user_session.get("inputs")
+    # msg is the user message,
+    # agent_message is the agents.
+
+
+    #graph: Runnable = cl.user_session.get("graph")
+    graph = cl.user_session.get("graph")
     config = cl.user_session.get("config")
 
-    attachment_file_text = ""
+    inputs = {"messages": [("user", msg.content)]}
 
-    for element in msg.elements:
-        #attachment_file_text += f"- {element.name} (path: {})\n"
-        new_path = element.path.replace("/workspace", ".")
-        attachment_file_text += f"{element.name} (path: {new_path})"
-    
-    content = msg.content
-    
-    if attachment_file_text:
-        content += f"\n\n Attachments\n{attachment_file_text}"
-
-    # Add user's message to history
-    inputs["messages"].append(HumanMessage(content=content))
-
-    # Send an empty message to prepare a place for streaming
     agent_message = cl.Message(content="")
     await agent_message.send()
-    
-    chunks = []
 
-    # Run the agent
-    # Many thanks to whoever wrote this: https://github.com/0msys/langgraph-chainlit-agent/blob/main/main.py
-    async for output in app.astream_log(inputs, include_types=["llm"], config=config):
-        for op in output.ops:
-            if op["path"] == "/streamed_output/-":
-                # Display progress in each step
-                edge_name = list(op["value"].keys())[0]
-                message = op["value"][edge_name]["messages"][-1]
-                
-                # In case of an action node, the message content is displayed (the return value of the tool is displayed)
-                if edge_name == "action":
-                    step_name = message.name
-                    step_output = "```\n" + message.content + "\n```"
+    # events = []
+    # async for event in graph.astream_events(inputs, version="v2", config=config):
+    #     events.append(event)
 
-                # For agent nodes, if it is a function call, show the function name and arguments
-                elif hasattr(message, "additional_kwargs") and message.additional_kwargs:
-                    step_name = edge_name
-                    fcall_name = message.additional_kwargs["function_call"]["name"]
-                    fcall_addargs = message.additional_kwargs["function_call"]["arguments"]
-                    step_output = f"function call: {fcall_name}\n\n```\n{fcall_addargs}\n```"
-                
-                # For other patterns nothing is displayed
-                else:
-                    continue
+    # print(events)
+    async for event in graph.astream_events(inputs, version="v2", config=config):
+        kind = event["event"]
+        #print(kind)
+        if kind == "on_chain_start":
+            if (
+                event["name"] == "Agent"
+            ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                print(
+                    f"Starting agent: {event['name']} with input: {event['data'].get('input')}"
+                )
+        elif kind == "on_chain_end":
+            if (
+                event["name"] == "Agent"
+            ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                print()
+                print("--")
+                print(
+                    f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}"
+                )
+        if kind == "on_chat_model_stream":
+            content = event["data"]["chunk"].content
+            if content:
+                # Empty content in the context of OpenAI means
+                # that the model is asking for a tool to be invoked.
+                # So we only print non-empty content
+                #print(content, end="|")
 
-                # Submit step
-                async with cl.Step(name=step_name) as step:
-                    step.output = step_output
-                    await step.update()
+                await agent_message.stream_token(content)
 
-            elif op["path"].startswith("/logs/") and op["path"].endswith(
-                "/streamed_output_str/-"
-            ):
-                # Stream the final response to a pre-prepared message
-                chunks.append(op["value"])
-                await agent_message.stream_token(op["value"])
+        elif kind == "on_tool_start":
+            print("--")
+            print(
+                f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
+            )
+        elif kind == "on_tool_end":
+            print(f"Done tool: {event['name']}")
+            print(f"Tool output was: {event['data'].get('output')}")
+            print("--")
 
-        # Combine the streamed responses to create the final response
-        res = "".join(chunks)
 
-    # Add the final response to the history and save it in the session
-    inputs["messages"].append(AIMessage(content=res))
-    cl.user_session.set("inputs", inputs)
-
-    await agent_message.update()
+    # Send empty message to stop the little ball from blinking
+    await agent_message.send()
