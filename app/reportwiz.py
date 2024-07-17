@@ -20,6 +20,10 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 
+from langgraph.checkpoint import MemorySaver
+
+
+
 dotenv.load_dotenv()
 
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
@@ -62,22 +66,26 @@ model = AzureChatOpenAI(
 # Prompt setup
 system_message = SystemMessage(content="You are a not very knowleadgeable assistant. You are bad at calculating lengths of words. Use the tools you have available whenever possible.")
 
-graph = create_react_agent(model, tools=tool_belt, messages_modifier=system_message)
+# Add memory to the agent
+
+memory = MemorySaver()
+
+graph = create_react_agent(model, tools=tool_belt, checkpointer=memory, messages_modifier=system_message)
 
 
-# Testing
+# # Testing
 
-#msg = "What is RAG in the context of Large Language Models? When did it break onto the scene?"
-msg = 'How many letters in the work "eduac"?'
-#msg="what is the weather in sf"
+# #msg = "What is RAG in the context of Large Language Models? When did it break onto the scene?"
+# msg = 'How many letters in the work "eduac"?'
+# #msg="what is the weather in sf"
 
 
-inputs = {"messages": [("user", msg )]}
-for s in graph.stream(inputs, stream_mode="values"):
-    message = s["messages"][-1]
-    if isinstance(message, tuple):
-        print(message)
-    else:
-        message.pretty_print()
+# inputs = {"messages": [("user", msg )]}
+# for s in graph.stream(inputs, stream_mode="values"):
+#     message = s["messages"][-1]
+#     if isinstance(message, tuple):
+#         print(message)
+#     else:
+#         message.pretty_print()
 
 

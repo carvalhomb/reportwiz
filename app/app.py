@@ -3,6 +3,7 @@ import dotenv
 import pathlib
 import operator
 import ast
+import uuid
 
 import chainlit as cl
 
@@ -50,12 +51,7 @@ import operator
 from reportwiz import graph
 
 
-
-
 ASSISTANT_NAME = "ReportWiz"
-
-
-
 
 @cl.author_rename
 def rename(original_author: str):
@@ -75,51 +71,90 @@ async def start_chat():
     
     cl.user_session.set("graph", graph)
 
+    # Save the list in the session to store the message history
+    cl.user_session.set("inputs", {"messages": []})
 
+    # Create a thread id and pass it as configuration
+    #config = {"metadata": {"conversation_id": str(uuid.uuid4())}}
+    conversation_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": conversation_id}}
+    cl.user_session.set("config", config)
 
 @cl.on_message
-async def main(message: cl.Message):
+async def main(msg: cl.Message):
     """
     This function will be called every time a message is received from a session.
     """
-    graph: Runnable = cl.user_session.get("graph")
+    #graph: Runnable = cl.user_session.get("graph")
 
-    state = cl.user_session.get("state")
-    #messages = state['messages']
+        # When a message is received, get the agent and message history from session
+    app = cl.user_session.get("graph")
+    inputs = cl.user_session.get("inputs")
+    config = cl.user_session.get("config")
 
-    # res = await graph.arun(
-    #     message.content, callbacks=[cl.AsyncLangchainCallbackHandler()]
-    # )
-    # await cl.Message(content=res).send()
+    attachment_file_text = ""
 
-    # Currently functions, without steps
-    res = await cl.make_async(graph.invoke)({"keys": {"question": message.content}}, stream_mode="values")
+    for element in msg.elements:
+        #attachment_file_text += f"- {element.name} (path: {})\n"
+        new_path = element.path.replace("/workspace", ".")
+        attachment_file_text += f"{element.name} (path: {new_path})"
+    
+    content = msg.content
+    
+    if attachment_file_text:
+        content += f"\n\n Attachments\n{attachment_file_text}"
 
-    #content = message.content
+    # Add user's message to history
+    inputs["messages"].append(HumanMessage(content=content))
 
-    #state = cl.user_session.get("state")
+    # Send an empty message to prepare a place for streaming
+    agent_message = cl.Message(content="")
+    await agent_message.send()
+    
+    chunks = []
 
-    # Append the new message to the state
-    #state["messages"] += [HumanMessage(content=message.content)]
+    # Run the agent
+    # Many thanks to whoever wrote this: https://github.com/0msys/langgraph-chainlit-agent/blob/main/main.py
+    async for output in app.astream_log(inputs, include_types=["llm"], config=config):
+        for op in output.ops:
+            if op["path"] == "/streamed_output/-":
+                # Display progress in each step
+                edge_name = list(op["value"].keys())[0]
+                message = op["value"][edge_name]["messages"][-1]
+                
+                # In case of an action node, the message content is displayed (the return value of the tool is displayed)
+                if edge_name == "action":
+                    step_name = message.name
+                    step_output = "```\n" + message.content + "\n```"
 
+                # For agent nodes, if it is a function call, show the function name and arguments
+                elif hasattr(message, "additional_kwargs") and message.additional_kwargs:
+                    step_name = edge_name
+                    fcall_name = message.additional_kwargs["function_call"]["name"]
+                    fcall_addargs = message.additional_kwargs["function_call"]["arguments"]
+                    step_output = f"function call: {fcall_name}\n\n```\n{fcall_addargs}\n```"
+                
+                # For other patterns nothing is displayed
+                else:
+                    continue
 
-    # Stream the response to the UI
-    # ui_message = cl.Message(content="")
-    # await ui_message.send()
-    # async for event in graph.astream_events(state, version="v1"):
+                # Submit step
+                async with cl.Step(name=step_name) as step:
+                    step.output = step_output
+                    await step.update()
 
-    #     if event["event"] == "on_chain_stream" and event["name"] == "agent":
-    #         content = event["data"]["chunk"]['messages'][0].content or ""
-    #         await ui_message.stream_token(token=content)
-    # await ui_message.update()
+            elif op["path"].startswith("/logs/") and op["path"].endswith(
+                "/streamed_output_str/-"
+            ):
+                # Stream the final response to a pre-prepared message
+                chunks.append(op["value"])
+                await agent_message.stream_token(op["value"])
 
-    # for s in graph.stream(inputs, stream_mode="values"):
-    # message = s["messages"][-1]
-    # if isinstance(message, tuple):
-    #     print(message)
-    # else:
-    #     message.pretty_print()
+        # Combine the streamed responses to create the final response
+        res = "".join(chunks)
 
+    # Add the final response to the history and save it in the session
+    inputs["messages"].append(AIMessage(content=res))
+    cl.user_session.set("inputs", inputs)
 
-
-
+    await agent_message.update()
