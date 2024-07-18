@@ -16,3 +16,5 @@ dependencies:
        - langchain-qdrant==0.1.2
        - pymupdf4llm==0.0.9
        - langgraph==0.1.8
+       - sqlalchemy==2.0.31
+       - sqlite-utils==3.36
