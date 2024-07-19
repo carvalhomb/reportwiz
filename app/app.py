@@ -50,6 +50,8 @@ import operator
 
 from reportwiz import graph
 
+from retrieval import qdrant_retriever
+
 
 ASSISTANT_NAME = "ReportWiz"
 
