@@ -1,9 +1,10 @@
 # Tables Metadata
 
-## temperatures
+## nasa_meteo_data
 
-- Table name: temperatures
-- Description: NASA/POWER CERES/MERRA2 Native Resolution Daily Data
+- Table name: nasa_meteo_data
+- Description: NASA/POWER CERES/MERRA2 Native Resolution Daily Data. The POWER Project
+Provides solar and meteorological data sets from NASA research for support of renewable energy, building energy efficiency and agricultural needs. The POWER solar data is based upon satellite observations from which surface insolation values are inferred. The meteorological parameters are based upon the MERRA-2 assimilation model. 
 - API: POWER Daily API, version v2.5.9
 - Sources: "ceres", "flashflux", "syn1deg", "merra2", "power"
 - Fill value for empty cells: -999.0
