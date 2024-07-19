@@ -49,6 +49,8 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIM
 import operator
 
 from reportwiz import graph
+#from db_inquirer import db_inquirer
+#from retrieval import report_retriever
 
 
 ASSISTANT_NAME = "ReportWiz"
@@ -133,6 +135,14 @@ async def main(msg: cl.Message):
 
                 await agent_message.stream_token(content)
 
+        elif kind == "on_chain_stream":
+            print('Chain stream')
+            print(event)
+            #content = event["data"]["chunk"]["agent"]["messages"][-1].content
+            print('--')
+            #if content:
+            #    await agent_message.stream_token(content)
+
         elif kind == "on_tool_start":
             print("--")
             print(
@@ -142,6 +152,8 @@ async def main(msg: cl.Message):
             print(f"Done tool: {event['name']}")
             print(f"Tool output was: {event['data'].get('output')}")
             print("--")
+        else:
+            print(f"Non-accounted for kind of event: {kind}")
 
 
     # Send empty message to stop the little ball from blinking

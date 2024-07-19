@@ -12,6 +12,8 @@ from langchain_community.document_loaders import TextLoader  # , PyMuPDFLoader
 from langchain_text_splitters import MarkdownTextSplitter
 from langchain_community.vectorstores import Qdrant
 
+from langchain.agents import tool
+
 
 dotenv.load_dotenv()
 
@@ -96,4 +98,12 @@ else:
     )
 
 # Create the retriever
-qdrant_retriever = qdrant_vectorstore.as_retriever()
+#qdrant_retriever = qdrant_vectorstore.as_retriever()
+
+@tool
+def pdf_retriever():
+    """
+    Tool to check a PDF repository of reports that have already been produced
+    and are available for consultation by the user.
+    """
+    return 'There are no PDF reports in the repository that answer to the query.'
