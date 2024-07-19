@@ -1,4 +1,3 @@
-[14:19] Damir Juhas
 import os
 import requests
 import json

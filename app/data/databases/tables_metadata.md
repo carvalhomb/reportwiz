@@ -11,6 +11,10 @@ Provides solar and meteorological data sets from NASA research for support of re
 - Start date: "20220101"
 - End date: "20240714"
 - Columns:
+    * date: date of measurement
+    * country: country of measurement
+    * city: city of measurement
+    * coordinates: coordinates of the location of measurement (longitude, latitude, elevation). Elevation is taken from MERRA-2 as Average for 0.5 x 0.625 degree lat/lon region = na meters
     * T2M: Temperature at 2 Meters in degrees Celsius (C)
     * T2MDEW: Dew/Frost Point at 2 Meters in degrees Celsius (C)
     * T2MWET: Wet Bulb Temperature at 2 Meters in degrees Celsius (C)
