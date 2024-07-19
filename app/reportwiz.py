@@ -71,10 +71,6 @@ pprint.pprint(tools)
 # Define the tools
 
 tool_belt = [
-    #DuckDuckGoSearchRun(),
-    #ArxivQueryRun(),
-    #get_word_length,
-    #check_weather
     pdf_retriever
 ] + tools
 
@@ -113,21 +109,4 @@ Then you should query the schema of the most relevant tables.
 memory = MemorySaver()
 
 graph = create_react_agent(llm, tools=tool_belt, checkpointer=memory, messages_modifier=system_message)
-
-
-# # Testing
-
-# #msg = "What is RAG in the context of Large Language Models? When did it break onto the scene?"
-# msg = 'How many letters in the work "eduac"?'
-# #msg="what is the weather in sf"
-
-
-# inputs = {"messages": [("user", msg )]}
-# for s in graph.stream(inputs, stream_mode="values"):
-#     message = s["messages"][-1]
-#     if isinstance(message, tuple):
-#         print(message)
-#     else:
-#         message.pretty_print()
-
 
