@@ -52,6 +52,8 @@ from reportwiz import graph
 #from db_inquirer import db_inquirer
 #from retrieval import report_retriever
 
+from retrieval import qdrant_retriever
+
 
 ASSISTANT_NAME = "ReportWiz"
 

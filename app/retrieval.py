@@ -17,16 +17,13 @@ from langchain.agents import tool
 
 dotenv.load_dotenv()
 
-
-
 qdrant_api_key = os.environ["QDRANT_API_KEY"]
 
 # ---- GLOBAL DECLARATIONS ---- #
 
-SOURCE_PDF_PATH = './data/airbnb.pdf'
-SOURCE_PDF_NAME = "Airbnb 10-k Filings from Q1-2024"
-VECTORSTORE_LOCATION = os.environ['QDRANT_VECTORSTORE_LOCATION']  # ':memory:'
-VECTORSTORE_COLLECTION_NAME = 'reportwiz_store'
+PDF_FOLDER_PATH = "data/reports/"
+VECTORSTORE_LOCATION = os.environ["QDRANT_VECTORSTORE_LOCATION"]
+VECTORSTORE_COLLECTION_NAME = os.environ['LANGCHAIN_PROJECT']
 
 # -- RETRIEVAL -- #
 
@@ -40,16 +37,9 @@ embedding_model = AzureOpenAIEmbeddings(
 
 qdrant_vectorstore = None
 
-# Let's check if the collection exists first.
-# There's an API for it: https://api.qdrant.tech/api-reference/collections/collection-exists
-# but it's not in the Python library (yet?),
-# so I'll make the REST request directly and save the result in a variable
-r = requests.get(f'{VECTORSTORE_LOCATION}/collections/{VECTORSTORE_COLLECTION_NAME}/exists',
-                 headers={'api-key': qdrant_api_key}
-                 )
-collection_exists = r.json()['result']['exists']
-# print(collection_exists)
+qdrant_client = QdrantClient(url=VECTORSTORE_LOCATION, api_key=qdrant_api_key)
 
+collection_exists = qdrant_client.collection_exists(collection_name=VECTORSTORE_COLLECTION_NAME)
 
 if not collection_exists:
     print(f"Indexing Files into vectorstore {VECTORSTORE_COLLECTION_NAME}")
@@ -59,16 +49,24 @@ if not collection_exists:
     # documents = PyMuPDFLoader(SOURCE_PDF_PATH).load()
 
     # convert the source PDF document to markdown, save it locally
-    md_text = pymupdf4llm.to_markdown(SOURCE_PDF_PATH)
-    md_path = SOURCE_PDF_PATH + '.md'
-    pathlib.Path(md_path).write_bytes(md_text.encode())
 
-    text_loader = TextLoader(md_path)
-    documents = text_loader.load()
+    documents = []
+    for file in os.listdir(PDF_FOLDER_PATH):
+        if file.endswith('.pdf'):
+                    
+            md_text = pymupdf4llm.to_markdown(PDF_FOLDER_PATH  + file)
+
+            md_path = PDF_FOLDER_PATH  + file + '.md'
+
+            pathlib.Path(md_path).write_bytes(md_text.encode())
+
+            text_loader = TextLoader(md_path)
+
+            documents.extend(text_loader.load())
 
     # CREATE TEXT SPLITTER AND SPLIT DOCUMENTS
     text_splitter = MarkdownTextSplitter(  # RecursiveCharacterTextSplitter(
-        chunk_size=600,
+        chunk_size=400,
         chunk_overlap=30,
         # length_function = tiktoken_len,
     )
@@ -96,6 +94,7 @@ else:
         prefer_grpc=True,
         api_key=qdrant_api_key,
     )
+
 
 # Create the retriever
 #qdrant_retriever = qdrant_vectorstore.as_retriever()
