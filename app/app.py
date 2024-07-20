@@ -6,6 +6,27 @@ import chainlit as cl
 from reportwiz import graph
 
 
+@cl.set_starters
+async def set_starters():
+    return [
+        cl.Starter(
+            label="Temperatures in Zagreb",
+            message="What is the average temperature in Zagreb during the Summer?",
+            #icon="/public/learn.svg",
+            ),
+
+        cl.Starter(
+            label="Solar panel production in Spring",
+            message="What is the average solar panel production in the spring?",
+            #icon="/public/learn.svg",
+            ),
+        cl.Starter(
+            label="Best months for solar panel production",
+            message="In which months is the solar panel production highest?",
+            #icon="/public/terminal.svg",
+            ),
+        ]
+
 
 @cl.on_chat_start
 async def start_chat():
@@ -26,12 +47,9 @@ async def main(msg: cl.Message):
     """
     This function will be called every time a message is received from a session.
     """
-
     # msg is the user message,
     # agent_message is the agents.
 
-
-    #graph: Runnable = cl.user_session.get("graph")
     graph = cl.user_session.get("graph")
     config = cl.user_session.get("config")
 
@@ -40,11 +58,6 @@ async def main(msg: cl.Message):
     agent_message = cl.Message(content="")
     await agent_message.send()
 
-    # events = []
-    # async for event in graph.astream_events(inputs, version="v2", config=config):
-    #     events.append(event)
-
-    # print(events)
     async for event in graph.astream_events(inputs, version="v2", config=config):
         kind = event["event"]        
         #tags = event.get("tags", [])
