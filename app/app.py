@@ -13,7 +13,8 @@ async def start_chat():
     # Save the list in the session to store the message history
     cl.user_session.set("inputs", {"messages": []})
 
-    # Create a thread id and pass it as configuration
+    # Create a thread id and pass it as configuration 
+    # to be able to use Langgraph's MemorySaver
     conversation_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": conversation_id}}
     cl.user_session.set("config", config)
@@ -24,7 +25,7 @@ async def main(msg: cl.Message):
     This function will be called every time a message is received from a session.
     """
     # msg is the user message,
-    # agent_message is the agents.
+    # agent_message is the agent's response.
 
     graph = cl.user_session.get("graph")
     config = cl.user_session.get("config")
@@ -37,11 +38,8 @@ async def main(msg: cl.Message):
     async for event in graph.astream_events(inputs, 
                                             version="v2", 
                                             config=config,
-                                            #callbacks=[cl.LangchainCallbackHandler(stream_final_answer=True)]
                                             ):
         kind = event["event"]        
-        #tags = event.get("tags", [])
-        #event_name = event.get('name', '')        
 
         if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
