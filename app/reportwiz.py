@@ -1,32 +1,24 @@
 import os
-from uuid import uuid4
 import dotenv
-from datetime import datetime
-import pprint
 
-from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
-from langchain_community.tools.arxiv.tool import ArxivQueryRun
-from langchain.agents import tool
-from langgraph.prebuilt import ToolExecutor
-from langchain_openai import AzureChatOpenAI
-from langchain_core.utils.function_calling import convert_to_openai_function
-from typing import TypedDict, Annotated
-from langgraph.graph.message import add_messages
-
-from langgraph.prebuilt import ToolInvocation
-from langgraph.prebuilt import create_react_agent
 import json
-from langchain_core.messages import FunctionMessage
-from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+
+
+
+from langchain_openai import AzureChatOpenAI
+from typing import Annotated, Literal
+from typing_extensions import TypedDict
+
+
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langchain_core.messages import SystemMessage, ToolMessage, AnyMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from langgraph.checkpoint import MemorySaver
 
-from langchain.agents import tool
-from langchain.chains import create_sql_query_chain
 from langchain_community.utilities import SQLDatabase
-from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
@@ -35,7 +27,7 @@ from retrieval import pdf_retriever
 
 dotenv.load_dotenv()
 
-VERSION = '0.1'
+VERSION = '0.2'
 
 #os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
@@ -98,8 +90,6 @@ You have access to two data sources on this topic:
 
 {table_metadata}
 
-
-
 ==========
 
 YOUR TASK:
@@ -115,7 +105,8 @@ You can order the results by a relevant column to return the most interesting ex
 Never query for all the columns from a specific table, only ask for the relevant columns given the question.
 You have access to tools for interacting with the database.
 Only use the below tools. Only use the information returned by the below tools to construct your final answer.
-You MUST double check your query before executing it to ensure it is a valid SQLite query. If you get an error while executing a query, rewrite the query and try again.
+You MUST double check your query before executing it to ensure it is a valid SQLite query. 
+If you get an error while executing a query, rewrite the query and try again.
 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
@@ -127,16 +118,117 @@ In your final response, DO NOT include the SQL query.
                                
 """
 
-system_message = SystemMessage(content=prompt)
+#system_message = SystemMessage(content=prompt)
 
 
 # Add memory to the agent
-
 memory = MemorySaver()
 
-graph = create_react_agent(llm, 
-                           tools=tool_belt, 
-                           checkpointer=memory, 
-                           messages_modifier=system_message
-                           )
+#############################################
+# CREATE PRE-BUILT GRAPH
+# graph = create_react_agent(llm,
+#                            tools=tool_belt,
+#                            checkpointer=memory,
+#                            messages_modifier=system_message
+#                            )
+#
 
+################################################
+# CREATE THE GRAPH MANUALLY
+
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
+
+class BasicToolNode:
+    """A node that runs the tools requested in the last AIMessage."""
+
+    def __init__(self, tools: list) -> None:
+        self.tools_by_name = {tool.name: tool for tool in tools}
+
+    def __call__(self, inputs: dict):
+        if messages := inputs.get("messages", []):
+            message = messages[-1]
+        else:
+            raise ValueError("No message found in input")
+        outputs = []
+        for tool_call in message.tool_calls:
+            tool_result = self.tools_by_name[tool_call["name"]].invoke(
+                tool_call["args"]
+            )
+            outputs.append(
+                ToolMessage(
+                    content=json.dumps(tool_result),
+                    name=tool_call["name"],
+                    tool_call_id=tool_call["id"],
+                )
+            )
+        return {"messages": outputs}
+
+
+
+# Modification: tell the LLM which tools it can call
+llm_with_tools = llm.bind_tools(tools)
+
+# Create a chain with the prompt
+primary_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "user", prompt
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+
+chat_runnable = primary_prompt | llm_with_tools
+
+
+
+def chatbot(state: State):
+    return {"messages": [chat_runnable.invoke(state["messages"])]}
+
+def route_tools(
+    state: State,
+) -> Literal["tools", "__end__"]:
+    """
+    Use in the conditional_edge to route to the ToolNode if the last message
+    has tool calls. Otherwise, route to the end.
+    """
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-1]
+    else:
+        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+        return "tools"
+    return "__end__"
+
+
+
+graph_builder = StateGraph(State)
+
+graph_builder.add_node("chatbot", chatbot)
+
+
+tool_node = BasicToolNode(tools=tools)
+graph_builder.add_node("tools", tool_node)
+
+
+# The `tools_condition` function returns "tools" if the chatbot asks to use a tool, and "__end__" if
+# it is fine directly responding. This conditional routing defines the main agent loop.
+graph_builder.add_conditional_edges(
+    "chatbot",
+    route_tools,
+    # The following dictionary lets you tell the graph to interpret the condition's outputs as a specific node
+    # It defaults to the identity function, but if you
+    # want to use a node named something else apart from "tools",
+    # You can update the value of the dictionary to something else
+    # e.g., "tools": "my_tools"
+    {"tools": "tools", "__end__": "__end__"},
+)
+# Any time a tool is called, we return to the chatbot to decide the next step
+graph_builder.add_edge("tools", "chatbot")
+graph_builder.add_edge(START, "chatbot")
+graph = graph_builder.compile(checkpointer=memory)
+
+#graph.get_graph().print_ascii()
