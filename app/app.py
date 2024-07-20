@@ -1,31 +1,30 @@
 import uuid
-import pprint
 
 import chainlit as cl
 
 from reportwiz import graph
 
 
-@cl.set_starters
-async def set_starters():
-    return [
-        cl.Starter(
-            label="Temperatures in Zagreb",
-            message="What is the average temperature in Zagreb during the Summer?",
-            icon="/public/thermometer.svg",
-            ),
+# @cl.set_starters
+# async def set_starters():
+#     return [
+#         cl.Starter(
+#             label="Temperatures in Zagreb",
+#             message="What is the average temperature in Zagreb during the Summer?",
+#             icon="/public/thermometer.svg",
+#             ),
 
-        cl.Starter(
-            label="Solar panel production in Spring",
-            message="What is the average solar panel production in the spring?",
-            icon="/public/weather.svg",
-            ),
-        cl.Starter(
-            label="Best months for solar panel",
-            message="In which months is the solar panel production highest?",
-            icon="/public/sunny.svg",
-            ),
-        ]
+#         cl.Starter(
+#             label="Solar panel production in Spring",
+#             message="What is the average solar panel production in the spring?",
+#             icon="/public/weather.svg",
+#             ),
+#         cl.Starter(
+#             label="Best months for solar panel",
+#             message="In which months is the solar panel production highest?",
+#             icon="/public/sunny.svg",
+#             ),
+#         ]
 
 
 @cl.on_chat_start
@@ -37,7 +36,6 @@ async def start_chat():
     cl.user_session.set("inputs", {"messages": []})
 
     # Create a thread id and pass it as configuration
-    #config = {"metadata": {"conversation_id": str(uuid.uuid4())}}
     conversation_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": conversation_id}}
     cl.user_session.set("config", config)
