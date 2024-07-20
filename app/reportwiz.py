@@ -35,7 +35,10 @@ from retrieval import pdf_retriever
 
 dotenv.load_dotenv()
 
-os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
+VERSION = '0.1'
+
+#os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
+os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
 
@@ -48,7 +51,7 @@ llm = AzureChatOpenAI(
     max_tokens=None,
     timeout=None,
     max_retries=2,
-    #streaming=True
+    streaming=True
 )
 
 ##############################################
