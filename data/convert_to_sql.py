@@ -37,6 +37,8 @@ def create_table_from_json(filepath, db, table_name):
 
     print('Done\n\n')
 
+    # Remember to reformat date to format YYYY-MM-DD
+
 #create_table_from_json(hep[0], db, hep[1])
 
 ######################################################
@@ -79,6 +81,9 @@ def create_temp_table_from_json(filepath, db, table_name, city):
     df['city'] = city
     df['country'] = 'Croatia'
     df = df.reset_index(drop=False, names=['date'])
+    
+    # Reformat date
+    df['date'] = df['date'].astype(str).str.replace(r'(\d{4})(\d{2})(\d{2})', r'\1-\2-\3', regex=True)
     cols_new_order = ['date', 'country', 'city', 'coordinates'] + cols
     df = df.loc[:, cols_new_order]
     print(df.head())
