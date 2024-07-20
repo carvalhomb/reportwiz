@@ -5,28 +5,6 @@ import chainlit as cl
 from reportwiz import graph
 
 
-# @cl.set_starters
-# async def set_starters():
-#     return [
-#         cl.Starter(
-#             label="Temperatures in Zagreb",
-#             message="What is the average temperature in Zagreb during the Summer?",
-#             icon="/public/thermometer.svg",
-#             ),
-
-#         cl.Starter(
-#             label="Solar panel production in Spring",
-#             message="What is the average solar panel production in the spring?",
-#             icon="/public/weather.svg",
-#             ),
-#         cl.Starter(
-#             label="Best months for solar panel",
-#             message="In which months is the solar panel production highest?",
-#             icon="/public/sunny.svg",
-#             ),
-#         ]
-
-
 @cl.on_chat_start
 async def start_chat():
     
