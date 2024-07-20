@@ -58,7 +58,11 @@ async def main(msg: cl.Message):
     agent_message = cl.Message(content="")
     await agent_message.send()
 
-    async for event in graph.astream_events(inputs, version="v2", config=config):
+    async for event in graph.astream_events(inputs, 
+                                            version="v2", 
+                                            config=config,
+                                            #callbacks=[cl.LangchainCallbackHandler(stream_final_answer=True)]
+                                            ):
         kind = event["event"]        
         #tags = event.get("tags", [])
         #event_name = event.get('name', '')        

@@ -2,7 +2,7 @@ name: reportwiz
 channels: 
   - conda-forge
 dependencies:
-  - python=3.11
+  - python=3.9
   - pip
   - pip:
        - python-dotenv==1.0.1
