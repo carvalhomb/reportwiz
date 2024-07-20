@@ -1,68 +1,10 @@
-import os
-import dotenv
-import pathlib
-import operator
-import ast
 import uuid
+import pprint
 
 import chainlit as cl
 
-import pymupdf4llm
-
-from qdrant_client import QdrantClient
-
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
-
-#from langchain_openai import ChatOpenAI
-from langchain_openai import AzureChatOpenAI,  AzureOpenAIEmbeddings
-#from langchain_openai.embeddings import OpenAIEmbeddings
-
-from langchain_community.document_loaders import TextLoader  # , PyMuPDFLoader
-from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
-from langchain_community.tools.arxiv.tool import ArxivQueryRun
-
-from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
-
-from langchain_community.vectorstores import Qdrant
-
-from langchain.schema.output_parser import StrOutputParser
-from langchain.schema.runnable import Runnable, RunnablePassthrough
-from langchain.schema.runnable.config import RunnableConfig
-
-from langchain_core.utils.function_calling import convert_to_openai_function
-from langchain.agents.format_scratchpad.openai_tools import (
-    format_to_openai_tool_messages,
-)
-
-from langchain.agents import tool, AgentExecutor
-from langchain.agents.output_parsers.openai_tools import OpenAIToolsAgentOutputParser
-from langchain.tools import StructuredTool
-from langchain_community.tools.ddg_search import DuckDuckGoSearchRun
-from langchain_community.tools.arxiv.tool import ArxivQueryRun
-from langgraph.graph import StateGraph, END
-
-
-from langgraph.prebuilt import ToolExecutor
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage
-
-
-import operator
-
 from reportwiz import graph
 
-ASSISTANT_NAME = "ReportWiz"
-
-@cl.author_rename
-def rename(original_author: str):
-    """
-    This function can be used to rename the 'author' of a message.
-.
-    """
-    rename_dict = {
-        "Assistant": ASSISTANT_NAME,
-        "Chatbot": ASSISTANT_NAME,
-    }
-    return rename_dict.get(original_author, original_author)
 
 
 @cl.on_chat_start
@@ -104,53 +46,69 @@ async def main(msg: cl.Message):
 
     # print(events)
     async for event in graph.astream_events(inputs, version="v2", config=config):
-        kind = event["event"]
-        #print(kind)
+        kind = event["event"]        
+        tags = event.get("tags", [])
+        event_name = event.get('name', '')
+        #print(f'{kind}--- tags: {tags} --- name: {event_name}')
+
         if kind == "on_chain_start":
-            if (
-                event["name"] == "Agent"
-            ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                print(
-                    f"Starting agent: {event['name']} with input: {event['data'].get('input')}"
-                )
+            if (event["name"] == "agent"):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                #print(f"Starting agent: {event['name']} with input: {event['data'].get('input')}")
+                pass
+
         elif kind == "on_chain_end":
-            if (
-                event["name"] == "Agent"
-            ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                print()
-                print("--")
-                print(
-                    f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}"
-                )
-        if kind == "on_chat_model_stream":
+            if (event["name"] == "agent"):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                #print()
+                #print("--")
+                #print(f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}")
+                #pass
+                #messages = event["data"].get('output', {}).get('messages', [])
+                #print(messages)
+                #last_message = messages[-1]
+                # agent_message.content = last_message.content
+                # await agent_message.send()
+                pass
+
+
+        elif kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
+            response_metadata = event["data"]["chunk"].response_metadata
+            
             if content:
                 # Empty content in the context of OpenAI means
                 # that the model is asking for a tool to be invoked.
                 # So we only print non-empty content
-                #print(content, end="|")
-
                 await agent_message.stream_token(content)
 
+            if response_metadata.get('finish_reason', '') == 'stop':
+                # Add a new line to avoid garbled output of formatted text
+                await agent_message.stream_token(' \n')
+                
+
         elif kind == "on_chain_stream":
-            print('Chain stream')
-            print(event)
-            #content = event["data"]["chunk"]["agent"]["messages"][-1].content
-            print('--')
-            #if content:
-            #    await agent_message.stream_token(content)
+            # print('Chain stream')
+            # print(event)
+            # print(f'event_name: {event_name}')
+            # if event_name=='agent':
+            #     content = event["data"].get("chunk")
+            #     if content:
+            #         await agent_message.stream_token(content)
+            pass
+
 
         elif kind == "on_tool_start":
-            print("--")
-            print(
-                f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
-            )
+            #print("--")
+            #print(f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
+            pass
+
         elif kind == "on_tool_end":
-            print(f"Done tool: {event['name']}")
-            print(f"Tool output was: {event['data'].get('output')}")
-            print("--")
+            #print(f"Done tool: {event['name']}")
+            #print(f"Tool output was: {event['data'].get('output')}")
+            #print("--")
+            pass
         else:
-            print(f"Non-accounted for kind of event: {kind}")
+            #print(f"Non-accounted for kind of event: {kind}")
+            pass
 
 
     # Send empty message to stop the little ball from blinking
