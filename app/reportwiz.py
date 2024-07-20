@@ -55,15 +55,15 @@ llm = AzureChatOpenAI(
 #SQL agent
 
 db_path = 'data/databases/database.db'
+metadata_path = 'data/databases/tables_metadata.md'
 
 db = SQLDatabase.from_uri(f"sqlite:///{db_path}?mode=ro", sample_rows_in_table_info=3)
 
-
+# Use the SQLDatabaseToolkit as described in
+# https://python.langchain.com/v0.2/docs/tutorials/sql_qa/
+# and https://api.python.langchain.com/en/latest/agent_toolkits/langchain_community.agent_toolkits.sql.toolkit.SQLDatabaseToolkit.html
 toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-
 tools = toolkit.get_tools()
-
-pprint.pprint(tools)
 
 
 
@@ -77,16 +77,34 @@ tool_belt = [
 
 ######################################
 # Prompt setup
-system_message = SystemMessage(
-    content="""
+
+# Get the table metadata
+with open(metadata_path, 'r') as f:
+    table_metadata = f.read()
+
+prompt = f"""
 You are a helpful and knowleageble agent designed to help the user get useful information about solar panels and weather.
 
-You have access to a repository of existing PDF reports that have already been produced on this topic.
+You have access to two data sources on this topic:
+
+1) A repository of existing PDF reports that have already been produced on this topic.
+
+2) An SQLite database that contains the following information:
+
+========
+
+{table_metadata}
+
+
+
+==========
+
+YOUR TASK:
 
 When a user asks you a question, FIRST you search for existing reports. If there are existing reports that answer to the user's question,
 you use the report to provide the information.
 
-IF, and ONLY IF, you cannot find an existing report, you will interact with a SQL database to get that information.
+IF, and ONLY IF, you cannot find an existing report, you will interact with the SQL database to get that information.
 
 Given an input question, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer.
 Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
@@ -94,19 +112,28 @@ You can order the results by a relevant column to return the most interesting ex
 Never query for all the columns from a specific table, only ask for the relevant columns given the question.
 You have access to tools for interacting with the database.
 Only use the below tools. Only use the information returned by the below tools to construct your final answer.
-You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
+You MUST double check your query before executing it to ensure it is a valid SQLite query. If you get an error while executing a query, rewrite the query and try again.
 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
 To start you should ALWAYS look at the tables in the database to see what you can query.
 Do NOT skip this step.
-Then you should query the schema of the most relevant tables.                               
+Then you should query the schema of the most relevant tables.       
+
+In your final response, DO NOT include the SQL query.
                                
-""")
+"""
+
+system_message = SystemMessage(content=prompt)
+
 
 # Add memory to the agent
 
 memory = MemorySaver()
 
-graph = create_react_agent(llm, tools=tool_belt, checkpointer=memory, messages_modifier=system_message)
+graph = create_react_agent(llm, 
+                           tools=tool_belt, 
+                           checkpointer=memory, 
+                           messages_modifier=system_message
+                           )
 

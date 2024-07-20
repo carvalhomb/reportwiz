@@ -11,7 +11,7 @@ Provides solar and meteorological data sets from NASA research for support of re
 - Start date: "20220101"
 - End date: "20240714"
 - Columns:
-    * date: date of measurement
+    * date: date of measurement, in YYYY-MM-DD format
     * country: country of measurement
     * city: city of measurement
     * coordinates: coordinates of the location of measurement (longitude, latitude, elevation). Elevation is taken from MERRA-2 as Average for 0.5 x 0.625 degree lat/lon region = na meters
@@ -68,8 +68,8 @@ Provides solar and meteorological data sets from NASA research for support of re
 - End date: "20240715"
 - Columns:
     * Mjerno_mjesto: anonymized identifier of measurement location.
-    * Datum: Date of measurement
-    * Vrijeme: Measurement time.
+    * Datum: Date of measurement, in YYYY-MM-DD format
+    * Vrijeme: Measurement time in HH:mm:SS.
     * Brojilo: anonymized identifier of the smart meter.
     * Vrijednost_snaga: Power value
     * Vrijednost_energija: Energy value
