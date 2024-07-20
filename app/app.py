@@ -47,30 +47,10 @@ async def main(msg: cl.Message):
     # print(events)
     async for event in graph.astream_events(inputs, version="v2", config=config):
         kind = event["event"]        
-        tags = event.get("tags", [])
-        event_name = event.get('name', '')
-        #print(f'{kind}--- tags: {tags} --- name: {event_name}')
+        #tags = event.get("tags", [])
+        #event_name = event.get('name', '')        
 
-        if kind == "on_chain_start":
-            if (event["name"] == "agent"):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                #print(f"Starting agent: {event['name']} with input: {event['data'].get('input')}")
-                pass
-
-        elif kind == "on_chain_end":
-            if (event["name"] == "agent"):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                #print()
-                #print("--")
-                #print(f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}")
-                #pass
-                #messages = event["data"].get('output', {}).get('messages', [])
-                #print(messages)
-                #last_message = messages[-1]
-                # agent_message.content = last_message.content
-                # await agent_message.send()
-                pass
-
-
-        elif kind == "on_chat_model_stream":
+        if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
             response_metadata = event["data"]["chunk"].response_metadata
             
@@ -84,32 +64,5 @@ async def main(msg: cl.Message):
                 # Add a new line to avoid garbled output of formatted text
                 await agent_message.stream_token(' \n')
                 
-
-        elif kind == "on_chain_stream":
-            # print('Chain stream')
-            # print(event)
-            # print(f'event_name: {event_name}')
-            # if event_name=='agent':
-            #     content = event["data"].get("chunk")
-            #     if content:
-            #         await agent_message.stream_token(content)
-            pass
-
-
-        elif kind == "on_tool_start":
-            #print("--")
-            #print(f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
-            pass
-
-        elif kind == "on_tool_end":
-            #print(f"Done tool: {event['name']}")
-            #print(f"Tool output was: {event['data'].get('output')}")
-            #print("--")
-            pass
-        else:
-            #print(f"Non-accounted for kind of event: {kind}")
-            pass
-
-
     # Send empty message to stop the little ball from blinking
     await agent_message.send()
