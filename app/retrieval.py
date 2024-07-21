@@ -13,6 +13,10 @@ from langchain_text_splitters import MarkdownTextSplitter
 from langchain_community.vectorstores import Qdrant
 
 from langchain.agents import tool
+from langchain.chains import RetrievalQA
+
+#from fuzzywuzzy import fuzz
+#from fuzzywuzzy import process
 
 
 dotenv.load_dotenv()
@@ -23,7 +27,7 @@ qdrant_api_key = os.environ["QDRANT_API_KEY"]
 
 PDF_FOLDER_PATH = "data/reports/"
 VECTORSTORE_LOCATION = os.environ["QDRANT_VECTORSTORE_LOCATION"]
-VECTORSTORE_COLLECTION_NAME = os.environ['LANGCHAIN_PROJECT']
+#VECTORSTORE_COLLECTION_NAME = os.environ['LANGCHAIN_PROJECT']
 
 # -- RETRIEVAL -- #
 
@@ -35,74 +39,100 @@ embedding_model = AzureOpenAIEmbeddings(
     openai_api_version="2023-05-15",
 )
 
-qdrant_vectorstore = None
-
 qdrant_client = QdrantClient(url=VECTORSTORE_LOCATION, api_key=qdrant_api_key)
 
-collection_exists = qdrant_client.collection_exists(collection_name=VECTORSTORE_COLLECTION_NAME)
 
-if not collection_exists:
-    print(f"Indexing Files into vectorstore {VECTORSTORE_COLLECTION_NAME}")
+directory_path = "data/reports/"
+txt_files = [file for file in os.listdir(directory_path) if file.endswith('.pdf')]
 
-    # Load docs
-    # CREATE TEXT LOADER AND LOAD DOCUMENTS
-    # documents = PyMuPDFLoader(SOURCE_PDF_PATH).load()
+all_documents = {}
+qdrant_collections = {}
 
-    # convert the source PDF document to markdown, save it locally
+for txt_file in txt_files:
 
-    documents = []
-    for file in os.listdir(PDF_FOLDER_PATH):
-        if file.endswith('.pdf'):
-                    
-            md_text = pymupdf4llm.to_markdown(PDF_FOLDER_PATH  + file)
+    collection_exists = qdrant_client.collection_exists(collection_name=txt_file)
 
-            md_path = PDF_FOLDER_PATH  + file + '.md'
+    if collection_exists == False:
 
-            pathlib.Path(md_path).write_bytes(md_text.encode())
+        md_text = pymupdf4llm.to_markdown(PDF_FOLDER_PATH + txt_file)
+        md_path = PDF_FOLDER_PATH  + txt_file + '.md'
+        pathlib.Path(md_path).write_bytes(md_text.encode())
+        text_loader = TextLoader(md_path)
 
-            text_loader = TextLoader(md_path)
+        #loader = TextLoader(os.path.join(directory_path, txt_file))
+        documents = text_loader.load()
 
-            documents.extend(text_loader.load())
+        # Step 2: Split documents into chunks and add metadata
+        text_splitter = MarkdownTextSplitter(chunk_size=500, chunk_overlap=50)
+        docs = text_splitter.split_documents(documents)
+        for doc in docs:
+            doc.metadata["source"] = txt_file  # Add source metadata
 
-    # CREATE TEXT SPLITTER AND SPLIT DOCUMENTS
-    text_splitter = MarkdownTextSplitter(  # RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=30,
-        # length_function = tiktoken_len,
+        all_documents[txt_file] = docs
+        
+        qdrant_collections[txt_file] = Qdrant.from_documents(
+            all_documents[txt_file],
+            embedding_model,
+            location=VECTORSTORE_LOCATION, 
+            collection_name=txt_file,
+            prefer_grpc=True,
+            api_key=qdrant_api_key,
+        )
+
+    
+    else:
+        qdrant_collections[txt_file] = Qdrant.from_existing_collection(
+            embedding_model,
+            path=None,
+            collection_name=txt_file,
+            url=VECTORSTORE_LOCATION,
+            prefer_grpc=True,
+            api_key=qdrant_api_key,
+        )
+
+retriever = {}
+for txt_file in txt_files:
+    retriever[txt_file] = qdrant_collections[txt_file].as_retriever()
+
+
+qa = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(),
+        verbose=True,
+        return_source_documents=True
     )
 
-    split_documents = text_splitter.split_documents(documents)
-    # print(len(split_documents))
-
-    # INDEX FILES
-    qdrant_vectorstore = Qdrant.from_documents(
-        split_documents,
-        embedding_model,
-        location=VECTORSTORE_LOCATION,
-        collection_name=VECTORSTORE_COLLECTION_NAME,
-        prefer_grpc=True,
-        api_key=qdrant_api_key,
-    )
-
-else:
-    # Load existing collection
-    qdrant_vectorstore = Qdrant.from_existing_collection(
-        embedding_model,
-        path=None,
-        collection_name=VECTORSTORE_COLLECTION_NAME,
-        url=VECTORSTORE_LOCATION,
-        prefer_grpc=True,
-        api_key=qdrant_api_key,
-    )
-
-
-# Create the retriever
-#qdrant_retriever = qdrant_vectorstore.as_retriever()
 
 @tool
-def pdf_retriever():
+def pdf_retriever(name):
     """
     Tool to check a PDF repository of reports that have already been produced
     and are available for consultation by the user.
     """
-    return 'There are no PDF reports in the repository that answer to the query.'
+
+    print(name)
+
+    search_name = name
+
+    # Find the best match using fuzzy search    
+    best_match = process.extractOne(search_name, txt_files, scorer=fuzz.ratio)
+
+    # Get the selected file name
+    selected_file = best_match[0]
+    
+    selected_retriever = retriever[selected_file]
+
+    #global query
+    results = selected_retriever.get_relevant_documents()
+    #global retrieved_text
+    
+    #total_content = "\n\nBelow are the related document's content: \n\n"
+    #chunk_count = 0
+    #for result in results:
+    #    chunk_count += 1
+    #    if chunk_count > 4:
+    #        break
+    #    total_content += result.page_content + "\n"
+    #retrieved_text = total_content
+    return results

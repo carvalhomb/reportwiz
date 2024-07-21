@@ -82,7 +82,9 @@ You are a helpful and knowleageble agent designed to help the user get useful in
 
 You have access to two data sources on this topic:
 
-1) A repository of existing PDF reports that have already been produced on this topic.
+1) A repository of existing PDF reports that have already been produced on this topic. You have access to the following tool:
+
+{pdf_retriever}
 
 2) An SQLite database that contains the following information:
 
@@ -167,7 +169,7 @@ class BasicToolNode:
 
 
 # Modification: tell the LLM which tools it can call
-llm_with_tools = llm.bind_tools(tools)
+llm_with_tools = llm.bind_tools(tool_belt)
 
 # Create a chain with the prompt
 primary_prompt = ChatPromptTemplate.from_messages(
@@ -210,7 +212,7 @@ graph_builder = StateGraph(State)
 graph_builder.add_node("chatbot", chatbot)
 
 
-tool_node = BasicToolNode(tools=tools)
+tool_node = BasicToolNode(tools=tool_belt)
 graph_builder.add_node("tools", tool_node)
 
 
