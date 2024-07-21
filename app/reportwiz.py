@@ -27,7 +27,7 @@ from retrieval_v2 import pdf_retriever
 
 dotenv.load_dotenv()
 
-VERSION = '0.3'
+VERSION = '0.4'
 
 #os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
