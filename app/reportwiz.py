@@ -22,12 +22,12 @@ from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
-from retrieval import pdf_retriever
+from retrieval_v2 import pdf_retriever
 
 
 dotenv.load_dotenv()
 
-VERSION = '0.2'
+VERSION = '0.3'
 
 #os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
@@ -82,9 +82,7 @@ You are a helpful and knowleageble agent designed to help the user get useful in
 
 You have access to two data sources on this topic:
 
-1) A repository of existing PDF reports that have already been produced on this topic. You have access to the following tool:
-
-{pdf_retriever}
+1) A repository of existing PDF reports that have already been produced on this topic. 
 
 2) An SQLite database that contains the following information:
 
