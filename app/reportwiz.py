@@ -22,12 +22,12 @@ from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
-from retrieval_v2 import pdf_retriever
+from retrieval import pdf_retriever
 
 
 dotenv.load_dotenv()
 
-VERSION = '0.4'
+VERSION = '0.5'
 
 #os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
@@ -78,7 +78,7 @@ with open(metadata_path, 'r') as f:
     table_metadata = f.read()
 
 prompt = f"""
-You are a helpful and knowleageble agent designed to help the user get useful information about solar panels and weather.
+You are a helpful and knowleageble agent designed to help the user get useful information about solar panels and weather in Croatia.
 
 You have access to two data sources on this topic:
 
@@ -114,7 +114,10 @@ To start you should ALWAYS look at the tables in the database to see what you ca
 Do NOT skip this step.
 Then you should query the schema of the most relevant tables.       
 
-In your final response, DO NOT include the SQL query.
+If you can't find an answer in the reports repository or in the database, you should answer with: "I could not find the information
+you requested in the repository or in the dabatase. I will create a request to the Business Analytics department"
+
+FRANKO, CONTINUE FROM HERE :)
                                
 """
 
