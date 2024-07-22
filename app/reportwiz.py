@@ -16,7 +16,8 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, ToolMessage, AnyMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 from langgraph.checkpoint import MemorySaver
 
@@ -131,11 +132,10 @@ To start you should ALWAYS look at the tables in the database to see what you ca
 Do NOT skip this step.
 Then you should query the schema of the most relevant tables.       
 
-If you can't find an answer in the reports repository or in the database, you should NOT answer with general
-information that is not in your data sources. Instead, you should answer with DISPATCH TICKET and include a description of the user's request.
+If you can't find an answer in the reports repository or in the database, DO NOT ANSWER! 
+If the user asks you to generate any plots, DO NOT ANSWER!
 
-If the user asks for more complex reports and graphs, you should answer with DISPATCH TICKET and include a description of the user's request.
-                               
+Don't worry, another agent will pick up the task and help the user.
 """
 
 # Add memory to the agent
@@ -189,26 +189,28 @@ primary_prompt = ChatPromptTemplate.from_messages(
 chat_runnable = primary_prompt | llm.bind_tools(tool_belt)#.with_structured_output(json_schema)
 
 
-# ### JIRA chain
+# ### Ticket generation chain
 
-# ticket_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         (
-#             "system", """
-# "You are a helpful assistant who received information from a different assistant.
-# Your task is to take the information about the request that the other agent received 
-# and format it as JSON in the following format:
+ticket_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system", f"""
+"You are a helpful assistant who creates tickets for the Business Analytics department.
+Your task is to take the user's request and create a well-formatted request ticket.
 
-# {json_format}
+In addition to a response to the user, create a JSON request in the following format:
 
-# This request will be forwarded to the Business Analytics department.
+{json_format}
 
-# """
-#         ),
-#         MessagesPlaceholder(variable_name="messages"),
-#     ]
-# )
-# ticket_runnable = ticket_prompt | llm
+Tell the user that their request has been sent to the Business Analytics department
+and his report will be created as soon as possible.
+
+"""
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+ticket_runnable = ticket_prompt | llm
 
 #----------------------------------------
 # Define nodes
@@ -216,13 +218,49 @@ chat_runnable = primary_prompt | llm.bind_tools(tool_belt)#.with_structured_outp
 def chatbot(state: MessagesState):
     return {"messages": [chat_runnable.invoke(state["messages"])]}
 
-# def ticket_agent(state: MessagesState):
-#     return {"messages": [ticket_runnable.invoke(state["messages"])]}
+def ticket_agent(state: MessagesState):
+    initial_query = state["messages"][0]
+    inputs = {"messages": [initial_query]}
+    return {"messages": [ticket_runnable.invoke(inputs)]}
 
+def dummy_node(state: MessagesState):
+  return
+
+
+def check_helpfulness(state: MessagesState) -> Literal["end", "continue"]:
+    initial_query = state["messages"][0]
+    final_response = state["messages"][-1]
+
+    if len(state["messages"]) > 10:
+        return "end"
+
+    helpfulness_prompt_template = """\
+    Given an initial query and a final response, determine if the final response is extremely helpful or not. 
+    Please indicate helpfulness with a 'Y' and unhelpfulness as an 'N'.
+
+    Initial Query:
+    {initial_query}
+
+    Final Response:
+    {final_response}"""
+
+    helpfulness_prompt_template = PromptTemplate.from_template(helpfulness_prompt_template)
+
+    helpfulness_chain = helpfulness_prompt_template | llm | StrOutputParser()
+
+    helpfulness_response = helpfulness_chain.invoke({"initial_query" : initial_query.content, "final_response" : final_response.content})
+
+    if "Y" in helpfulness_response:
+        print("Helpful!")
+        return "end"
+    else:
+        print("Not helpful!")
+        return "continue"
+    
 
 def route_tools(
     state: MessagesState,
-) -> Literal["tools", "create_request", "__end__"]:
+) -> Literal["tools", "__end__"]:
     """
     Use in the conditional_edge to route to the ToolNode if the last message
     has tool calls. Otherwise, route to the end.
@@ -233,11 +271,9 @@ def route_tools(
         ai_message = messages[-1]
     else:
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
     if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
         return "tools"
-    # if "DISPATCH TICKET" in ai_message.content:
-    #     # The chatbot decided to dispatch a ticket
-    #     return "create_request"
     return "__end__"
 
 
@@ -248,13 +284,18 @@ tool_node = ToolNode(tools=tool_belt)
 #----------------------------------------
 # Build the graph, connecting the edges
 
+# Start the graph
 graph_builder = StateGraph(MessagesState)
 
+# Add the nodes
 graph_builder.add_node("chatbot", chatbot)
 graph_builder.add_node("tools", tool_node)
-#graph_builder.add_node("ticket_agent", ticket_agent)
+graph_builder.add_node("passthrough", dummy_node)
+graph_builder.add_node("ticket_agent", ticket_agent)
 
 
+# Add the edges
+graph_builder.add_edge(START, "chatbot")
 # The `tools_condition` function returns "tools" if the chatbot asks to use a tool, and "__end__" if
 # it is fine directly responding. This conditional routing defines the main agent loop.
 graph_builder.add_conditional_edges(
@@ -265,20 +306,30 @@ graph_builder.add_conditional_edges(
     # want to use a node named something else apart from "tools",
     # You can update the value of the dictionary to something else
     # e.g., "tools": "my_tools"
-    #{"tools": "tools", "create_request": "ticket_agent", "__end__": "__end__"},
-    {"tools": "tools", "__end__": "__end__"},
+    {"tools": "tools", "__end__": "passthrough"},
 )
+
+graph_builder.add_conditional_edges(
+    "passthrough",
+    check_helpfulness,
+    {
+        "continue" : "ticket_agent",
+        "end" : END
+    }
+)
+
 # Any time a tool is called, we return to the chatbot to decide the next step
 graph_builder.add_edge("tools", "chatbot")
-graph_builder.add_edge(START, "chatbot")
-#graph_builder.add_edge("ticket_agent", "chatbot")
+
+graph_builder.add_edge("ticket_agent", END)
+
 
 graph = graph_builder.compile(checkpointer=memory)
 
 
 
 
-#graph.get_graph().print_ascii()
+graph.get_graph().print_ascii()
 # png_graph = graph.get_graph().draw_mermaid_png(
 #             draw_method=MermaidDrawMethod.API,
 #         )
@@ -286,3 +337,12 @@ graph = graph_builder.compile(checkpointer=memory)
 # with open('/mnt/c/Users/mbrandao/Downloads/graph.png', 'wb') as png_file:
 #     png_file.write(png_graph)
 
+#from langchain_core.messages import HumanMessage
+
+# import uuid
+# conversation_id = str(uuid.uuid4())
+# config = {"configurable": {"thread_id": conversation_id}}
+
+# inputs = {"messages" : [HumanMessage(content="What is the weather like in Brasilia, Brazil?")]}
+
+# messages = graph.invoke(inputs, config=config,)

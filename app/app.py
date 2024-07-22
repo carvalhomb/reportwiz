@@ -57,7 +57,8 @@ async def main(msg: cl.Message):
                 # Add a new line to avoid garbled output of formatted text
                 await agent_message.stream_token(' \n')
 
-        elif kind == 'on_chain_stream' and event_name == 'chatbot':
+        elif kind == 'on_chain_stream' and event_name in ('chatbot', 'ticket_agent'):
+            print(event)
             chunk = event['data'].get('chunk', {})
             messages = chunk.get('messages', [])
             last_message = messages[-1]
