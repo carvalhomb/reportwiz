@@ -235,7 +235,7 @@ def check_helpfulness(state: MessagesState) -> Literal["end", "continue"]:
         return "end"
 
     helpfulness_prompt_template = """\
-    Given an initial query and a final response, determine if the final response is extremely helpful or not. 
+    Given an initial query and a final response, determine if the final response is helpful or not. 
     Please indicate helpfulness with a 'Y' and unhelpfulness as an 'N'.
 
     Initial Query:
@@ -296,6 +296,7 @@ graph_builder.add_node("ticket_agent", ticket_agent)
 
 # Add the edges
 graph_builder.add_edge(START, "chatbot")
+
 # The `tools_condition` function returns "tools" if the chatbot asks to use a tool, and "__end__" if
 # it is fine directly responding. This conditional routing defines the main agent loop.
 graph_builder.add_conditional_edges(
