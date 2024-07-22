@@ -35,73 +35,63 @@ async def main(msg: cl.Message):
     agent_message = cl.Message(content="")
     await agent_message.send()
 
-    # async for event in graph.astream_events(inputs, 
-    #                                         version="v2", 
-    #                                         config=config,
-    #                                         ):
+    async for event in graph.astream_events(inputs,
+                                            version="v2",
+                                            config=config,
+                                            ):
        
-    #     kind = event["event"]
-    #     event_name = event.get('name', '')
+        kind = event["event"]
+        event_name = event.get('name', '')
+        print('-----------------------------')
+        print(f'{kind} -- {event_name}')
+        print()
+        print(event)
+        print()
 
-    #     if (kind == "on_chat_model_stream"):
-    #         content = event["data"]["chunk"].content
-    #         response_metadata = event["data"]["chunk"].response_metadata
+        if kind == "on_chat_model_stream":
+            content = event["data"]["chunk"].content
+            response_metadata = event["data"]["chunk"].response_metadata
             
-    #         if content:
-    #             # Empty content in the context of OpenAI means
-    #             # that the model is asking for a tool to be invoked.
-    #             # So we only print non-empty content
-    #             await agent_message.stream_token(content)
-
-    #         if response_metadata.get('finish_reason', '') == 'stop':
-    #             # Add a new line to avoid garbled output of formatted text
-    #             await agent_message.stream_token(' \n')
-
-    #     elif kind == 'on_chain_stream':
-
-    #         if event_name in ('chatbot'):            
-    #             chunk = event['data'].get('chunk', {})
-    #             messages = chunk.get('messages', [])
-    #             last_message = messages[-1]
-    #             content = last_message.content
-    #             reason = ''
-    #             try:
-    #                 response_metadata = chunk.response_metadata
-    #                 reason = response_metadata.get('finish_reason', '')
-    #             except Exception as e:
-    #                 pass
-
-    #             if content:
-    #                 await agent_message.stream_token(content)
-    #             if reason == 'stop':
-    #                 # Add a new line to avoid garbled output of formatted text
-    #                 await agent_message.stream_token(' \n')
-
-    #     elif kind=='on_chain_end':
-    #         pass
-            
-    async for chunk in graph.astream(inputs, stream_mode="values", config=config):
-        messages = chunk['messages']
-        last_message = messages[-1]
-        content = last_message.content
-        reason = ''
-        try:
-            response_metadata = last_message.response_metadata
-            reason = response_metadata.get('finish_reason', '')
-        except Exception as e:
-            pass
-
-        if content:
-            #print(chunk)
-            # await agent_message.stream_token(content)
-            if reason == 'stop':
-                # Add a new line to avoid garbled output of formatted text
+            if content:
+                # Empty content in the context of OpenAI means
+                # that the model is asking for a tool to be invoked.
+                # So we only print non-empty content
                 await agent_message.stream_token(content)
+
+            if response_metadata.get('finish_reason', '') == 'stop':
+                # Add a new line to avoid garbled output of formatted text
                 await agent_message.stream_token(' \n')
-            else:
-                print('........................')
-                print(chunk)
-                print('........................')
+
+        elif kind == 'on_chain_stream':
+            if event_name in ['chatbot', 'ticket_agent']:
+                chunk = event['data'].get('chunk', {})
+                messages = chunk.get('messages', [])
+                last_message = messages[-1]
+                content = last_message.content
+                reason = ''
+                try:
+                    response_metadata = chunk.response_metadata
+                    reason = response_metadata.get('finish_reason', '')
+                except Exception as e:
+                    pass
+
+                if content:
+                    await agent_message.stream_token(content)
+                if reason == 'stop':
+                    # Add a new line to avoid garbled output of formatted text
+                    await agent_message.stream_token(' \n')
+
+        elif kind == 'on_chain_end' and event_name == 'check_helpfulness':
+            funct_output = event.get('data', {}).get('output', '')
+            if funct_output == 'dispatch_ticket':
+                print('---------------------------------- dispatch----------')
+                # Message was not helpful. Clear the output
+                agent_message.content = ""
+                await agent_message.update()
+
+        elif kind == 'on_chain_start':
+
+            pass
 
                 
     # Send empty message to stop the little ball from blinking

@@ -202,8 +202,8 @@ In addition to a response to the user, create a JSON request in the following fo
 
 {json_format}
 
-Tell the user that their request has been sent to the Business Analytics department
-and his report will be created as soon as possible.
+Tell the user that we are sorry that we could not find the information they requested. Also, tell them 
+they can use the formatted JSON request below to send a request to the Business Analytics department.
 
 """
         ),
@@ -255,7 +255,7 @@ def check_helpfulness(state: MessagesState) -> Literal["end", "continue"]:
         return "end"
     else:
         print("Not helpful!")
-        return "continue"
+        return "dispatch_ticket"
     
 
 def route_tools(
@@ -314,7 +314,7 @@ graph_builder.add_conditional_edges(
     "passthrough",
     check_helpfulness,
     {
-        "continue" : "ticket_agent",
+        "dispatch_ticket" : "ticket_agent",
         "end" : END
     }
 )
@@ -330,7 +330,7 @@ graph = graph_builder.compile(checkpointer=memory)
 
 
 
-graph.get_graph().print_ascii()
+#graph.get_graph().print_ascii()
 # png_graph = graph.get_graph().draw_mermaid_png(
 #             draw_method=MermaidDrawMethod.API,
 #         )
