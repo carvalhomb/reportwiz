@@ -39,7 +39,7 @@ async def main(msg: cl.Message):
                                             version="v2", 
                                             config=config,
                                             ):
-        
+       
         kind = event["event"]
         event_name = event.get('name', '')
 
