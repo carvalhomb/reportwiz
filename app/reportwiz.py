@@ -77,7 +77,7 @@ tools = toolkit.get_tools()
 @tool
 def check_helpfulness(input):
     """
-    Tool to check whether a final response is helpful, given a user's query
+    Check whether an answer is helpful or not, given a user's initial query.
     """
     initial_query = input["initial_query"]
     final_response = input["final_response"]
@@ -97,7 +97,7 @@ def check_helpfulness(input):
 
     helpfulness_chain = helpfulness_prompt_template | llm | StrOutputParser()
 
-    helpfulness_response = helpfulness_chain.invoke({"initial_query" : initial_query.content, "final_response" : final_response.content})
+    helpfulness_response = helpfulness_chain.invoke({"initial_query" : initial_query, "final_response" : final_response})
 
     if "Y" in helpfulness_response:
         print("Helpful!")
@@ -114,6 +114,7 @@ tool_belt = [
     check_helpfulness
 ] + tools
 
+tool_belt = [check_helpfulness]
 
 ######################################
 # Prompt setup
@@ -132,10 +133,19 @@ json_format = """
 }}
 """
 
-prompt = f"""
-You are a helpful and knowleageble agent designed to help the user get useful information about solar panels and weather in Croatia.
+helpfulness_json = """
+{{'initial_query': USER'S REQUEST,
+'final_response': YOUR FINAL RESPONSE TO BE EVALUATED
+}}
+"""
 
-You have access to two data sources on this topic:
+prompt = f"""
+You are a helpful and knowleageble agent designed to help the user get useful information 
+about solar panels and weather in Croatia. When the user asks you for information that you
+don't have access to, you help them generate a well-formatted ticket to be sent to the 
+Business Analytics department.
+
+You have access to two data sources:
 
 1) A repository of existing PDF reports that have already been produced on this topic. 
 
@@ -149,13 +159,15 @@ You have access to two data sources on this topic:
 
 YOUR TASK:
 
-When a user asks you a question, FIRST you search for existing reports. If there are existing reports that answer to the user's question,
-you use the report to provide the information.
+When a user asks you a question, FIRST you search for existing reports. If there are existing 
+reports that answer to the user's question, you use the report to provide the information.
 
 IF, and ONLY IF, you cannot find an existing report, you will interact with the SQL database to get that information.
 
-Given an input question, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer.
-Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
+Given an input question, create a syntactically correct SQLite query to run, then look at 
+the results of the query and return the answer.
+Unless the user specifies a specific number of examples they wish to obtain, always limit 
+your query to at most 5 results.
 You can order the results by a relevant column to return the most interesting examples in the database.
 Never query for all the columns from a specific table, only ask for the relevant columns given the question.
 You have access to tools for interacting with the database.
@@ -170,10 +182,14 @@ Do NOT skip this step.
 Then you should query the schema of the most relevant tables.       
 
 If you can't find an answer in the reports repository or in the database, DO NOT ANSWER! 
-If the user asks you to generate any plots, DO NOT ANSWER!
+If the user asks you to generate any plots, DO NOT ANSWER! In those cases, you help them generate a
+well-formatted ticket to the Business Analytics department.
 
-Once you think you have searched all sources and have a final answer, you should check whether the
-answer you have is helpful or not, given the user's query. If your answer is not helpful,
+Once you think you have searched all sources and have a final answer, you should use your helpfullness checker tool to
+check whether the answer you have is helpful or not, given the user's query. Call the tool with the following JSON format:
+{helpfulness_json}
+ 
+If the tool indicates that your answer is not helpful,
 you should apologize to the user for not finding the information they requested. Then,
 you should create a well-formatted request ticket in the following JSON format:
 
@@ -181,6 +197,16 @@ you should create a well-formatted request ticket in the following JSON format:
  
 Finally, tell the user they can use the formatted JSON request below to send a request to the 
 Business Analytics department.
+"""
+
+prompt = f"""
+You are a helpful agent.
+
+After you generate a final response to the user, you MUST check whether your answer is helpful or not before sending it to the user.
+Call the helpfulness checker tool with the following JSON format:
+{helpfulness_json}
+
+If the answer is not helpful, you should say "BUAAAAAA". If your answer is helpful, you should say "I'm the BEST!"
 """
 
 # Add memory to the agent
@@ -198,7 +224,7 @@ primary_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
-chat_runnable = primary_prompt | llm.bind_tools(tool_belt)#.with_structured_output(json_schema)
+chat_runnable = primary_prompt | llm.bind_tools(tool_belt)
 
 
 # ### Ticket generation chain
@@ -313,15 +339,15 @@ graph = graph_builder.compile(checkpointer=memory)
 
 
 
-graph.get_graph().print_ascii()
-png_graph = graph.get_graph().draw_mermaid_png(
-            draw_method=MermaidDrawMethod.API,
-        )
-
-#graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
-graph_path = 'graph.png'
-with open(graph_path, 'wb') as png_file:
-    png_file.write(png_graph)
+# graph.get_graph().print_ascii()
+# png_graph = graph.get_graph().draw_mermaid_png(
+#             draw_method=MermaidDrawMethod.API,
+#         )
+#
+# #graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
+# graph_path = 'graph.png'
+# with open(graph_path, 'wb') as png_file:
+#     png_file.write(png_graph)
 
 #from langchain_core.messages import HumanMessage
 
