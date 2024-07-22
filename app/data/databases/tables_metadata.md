@@ -4,7 +4,11 @@
 
 - Table name: nasa_meteo_data
 - Description: NASA/POWER CERES/MERRA2 Native Resolution Daily Data. The POWER Project
-Provides solar and meteorological data sets from NASA research for support of renewable energy, building energy efficiency and agricultural needs. The POWER solar data is based upon satellite observations from which surface insolation values are inferred. The meteorological parameters are based upon the MERRA-2 assimilation model. 
+Provides solar and meteorological data sets from NASA research for support of renewable energy, 
+building energy efficiency and agricultural needs. The POWER solar data is based upon satellite 
+observations from which surface insolation values are inferred. The meteorological parameters 
+are based upon the MERRA-2 assimilation model. This table contains data for the following cities
+in Croatia: Dubrovnik, Osijek, Rijeka, Split, Vukovar, Hvar, Zagreb
 - API: POWER Daily API, version v2.5.9
 - Sources: "ceres", "flashflux", "syn1deg", "merra2", "power"
 - Fill value for empty cells: -999.0
@@ -14,7 +18,8 @@ Provides solar and meteorological data sets from NASA research for support of re
     * date: date of measurement, in YYYY-MM-DD format
     * country: country of measurement
     * city: city of measurement
-    * coordinates: coordinates of the location of measurement (longitude, latitude, elevation). Elevation is taken from MERRA-2 as Average for 0.5 x 0.625 degree lat/lon region = na meters
+    * coordinates: coordinates of the location of measurement (longitude, latitude, elevation). Elevation 
+    is taken from MERRA-2 as Average for 0.5 x 0.625 degree lat/lon region = na meters
     * T2M: Temperature at 2 Meters in degrees Celsius (C)
     * T2MDEW: Dew/Frost Point at 2 Meters in degrees Celsius (C)
     * T2MWET: Wet Bulb Temperature at 2 Meters in degrees Celsius (C)
@@ -35,7 +40,8 @@ Provides solar and meteorological data sets from NASA research for support of re
 ## electricity_input_output_aggregated
 
 - Table name: electricity_input_output_aggregated
-- Description: Daily aggregation of measurements of amount of electricity consumed vs electricity produced by a solar panel installed in the roof of a household located in Vukovar, Croatia.
+- Description: Daily aggregation of measurements of amount of electricity consumed vs electricity produced 
+by a solar panel installed in the roof of a household located in Vukovar, Croatia.
 - API: Unknown
 - Sources: HEP smart meter
 - Fill value for empty cells: None
@@ -53,14 +59,17 @@ Provides solar and meteorological data sets from NASA research for support of re
     * Preuzeto_total: Total amount of electricity taken from the grid over the whole day (Dnevna_Preuzeto + Nocna_Preuzeto)
     * Poslano_total: Total amount of electricity sent to the grid over the whole day (Dnevna_Poslano + Nocna_Poslano)
     * UkupnaPotrosnja: Total amount of electricity used by the household
-    * Predano_vs_Utroseno: Difference between produced electricity by the solar panel and used electricity in the day (SolarPower-UkupnaPotrosnja). May be negative when more electricity was produced by the solar panels than what was used by the household.
+    * Predano_vs_Utroseno: Difference between produced electricity by the solar panel and used 
+    electricity in the day (SolarPower-UkupnaPotrosnja). May be negative when more electricity 
+    was produced by the solar panels than what was used by the household.
 
 
 
 ## electricity_input_output
 
 - Table name: electricity_input_output
-- Description: Records of household electricity usage (output) and electricity produced by a solar panel (input). Records are registered every 15 minutes.
+- Description: Records of household electricity usage (output) and electricity produced by a 
+solar panel (input). Records are registered every 15 minutes.
 - API: Unknown
 - Sources: HEP smart meter
 - Fill value for empty cells: None
