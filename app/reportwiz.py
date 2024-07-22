@@ -28,8 +28,6 @@ from retrieval import pdf_retriever
 dotenv.load_dotenv()
 
 VERSION = '0.5'
-
-#os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - {uuid4().hex[0:8]}"
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -77,6 +75,16 @@ tool_belt = [
 with open(metadata_path, 'r') as f:
     table_metadata = f.read()
 
+
+json_format = """
+{{
+    'project': {{'id': 123}},
+    'summary': USER'S QUERY',
+    'description': summary of the user's query,
+    'issuetype': {{'name': 'Report'}},
+}}
+"""
+
 prompt = f"""
 You are a helpful and knowleageble agent designed to help the user get useful information about solar panels and weather in Croatia.
 
@@ -115,26 +123,15 @@ Do NOT skip this step.
 Then you should query the schema of the most relevant tables.       
 
 If you can't find an answer in the reports repository or in the database, you should answer with: "I could not find the information
-you requested in the repository or in the dabatase. I will create a request to the Business Analytics department"
+you requested in the repository or in the dabatase. I will create a request to the Business Analytics department", and then create a 
+JSON-formatted request in the following format:
 
-FRANKO, CONTINUE FROM HERE :)
+{json_format}
                                
 """
 
-#system_message = SystemMessage(content=prompt)
-
-
 # Add memory to the agent
 memory = MemorySaver()
-
-#############################################
-# CREATE PRE-BUILT GRAPH
-# graph = create_react_agent(llm,
-#                            tools=tool_belt,
-#                            checkpointer=memory,
-#                            messages_modifier=system_message
-#                            )
-#
 
 ################################################
 # CREATE THE GRAPH MANUALLY
@@ -144,7 +141,6 @@ class State(TypedDict):
 
 class BasicToolNode:
     """A node that runs the tools requested in the last AIMessage."""
-
     def __init__(self, tools: list) -> None:
         self.tools_by_name = {tool.name: tool for tool in tools}
 
@@ -169,10 +165,7 @@ class BasicToolNode:
 
 
 
-# Modification: tell the LLM which tools it can call
-llm_with_tools = llm.bind_tools(tool_belt)
-
-# Create a chain with the prompt
+# Create a chain with the prompt and the llm bound with tools
 primary_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -181,10 +174,10 @@ primary_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
+chat_runnable = primary_prompt | llm.bind_tools(tool_belt)
 
-chat_runnable = primary_prompt | llm_with_tools
-
-
+#----------------------------------------
+# Define nodes
 
 def chatbot(state: State):
     return {"messages": [chat_runnable.invoke(state["messages"])]}
@@ -206,14 +199,14 @@ def route_tools(
         return "tools"
     return "__end__"
 
+tool_node = BasicToolNode(tools=tool_belt)
 
+#----------------------------------------
+# Build the graph, connecting the edges
 
 graph_builder = StateGraph(State)
 
 graph_builder.add_node("chatbot", chatbot)
-
-
-tool_node = BasicToolNode(tools=tool_belt)
 graph_builder.add_node("tools", tool_node)
 
 
@@ -232,6 +225,7 @@ graph_builder.add_conditional_edges(
 # Any time a tool is called, we return to the chatbot to decide the next step
 graph_builder.add_edge("tools", "chatbot")
 graph_builder.add_edge(START, "chatbot")
+
 graph = graph_builder.compile(checkpointer=memory)
 
 #graph.get_graph().print_ascii()
