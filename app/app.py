@@ -86,19 +86,22 @@ async def main(msg: cl.Message):
         content = last_message.content
         reason = ''
         try:
-            response_metadata = chunk.response_metadata
+            response_metadata = last_message.response_metadata
             reason = response_metadata.get('finish_reason', '')
         except Exception as e:
             pass
 
         if content:
-            print(chunk)
+            #print(chunk)
             # await agent_message.stream_token(content)
             if reason == 'stop':
                 # Add a new line to avoid garbled output of formatted text
-                print(content)
                 await agent_message.stream_token(content)
                 await agent_message.stream_token(' \n')
+            else:
+                print('........................')
+                print(chunk)
+                print('........................')
 
                 
     # Send empty message to stop the little ball from blinking
