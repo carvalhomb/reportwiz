@@ -39,7 +39,7 @@ from info_retriever import runnable_retriever, retriever_tool_belt
 
 dotenv.load_dotenv()
 
-VERSION = '0.7'
+VERSION = '0.7.1'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -59,42 +59,58 @@ llm_chatbot = AzureChatOpenAI(
 ################################################
 # CREATE THE GRAPH MANUALLY
 
-json_format = """
-{{
-    'project': {{'id': 123}},
-    'summary': USER'S QUERY',
-    'description': summary of the user's query,
-    'issuetype': {{'name': 'Report'}},
-}}
-"""
+# json_format = """
+# {{
+#     'project': {{'id': 123}},
+#     'summary': USER'S QUERY',
+#     'description': summary of the user's query,
+#     'issuetype': {{'name': 'Report'}},
+# }}
+# """
 
-main_prompt = f"""
-You are a helpful and knowleageble agent designed to help the user get the information they requested.
+json_schema = {
+    "title": "response",
+    "description": "Chatbot response",
+    "type": "object",
+    "properties": {
+        "contents": {
+            "type": "string",
+            "description": "The model's response or the original user query",
+        },
+        "response_type": {
+            "type": "string",
+            "description": "whether final_response or user_query",
+        },
+    },
+    "required": ["response_type"],
+}
+
+main_prompt = """
+You are a helpful agent designed to help the user get the information they requested.
 
 You collaborate with another agent that retrieves the information for you.
 
-=======
+When a user asks you a question, you create a JSON response with response_type = user_query, 
+which will be forwarded to another agent.
 
-YOUR TASK:
-
-When a user asks you a question, you will repeat the user's request word by word to be forwarded to the other agent.
-
-Once the other agent finishes their retrieval, you will repeat the other agent's answer to the user word by word. 
-
+When you receive an answer, classify it as response_type = final_response and repeat it
+word by word to the user. 
                                
 """
 
-continue_prompt = """
-However, if the other agent cannot find the information, you MUST apologize to the user.
-Then, you will create a well-formatted JSON request to be forwarded to the Business Analytics department. 
 
-The request should be in the following format:
 
-{json_format}
+# continue_prompt = """
+# However, if the other agent cannot find the information, you MUST apologize to the user.
+# Then, you will create a well-formatted JSON request to be forwarded to the Business Analytics department. 
 
-You will tell the user they can use the JSON request above to make their request to the Business Analytics
-department.
-"""
+# The request should be in the following json format:
+
+# {json_format}
+
+# You will tell the user they can use the JSON request above to make their request to the Business Analytics
+# department.
+# """
 
 # Create a chain with the main prompt
 primary_prompt = ChatPromptTemplate.from_messages(
@@ -105,7 +121,7 @@ primary_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
-chat_runnable = primary_prompt | llm_chatbot
+chat_runnable = primary_prompt | llm_chatbot.with_structured_output(json_schema, method='json_mode', include_raw=True)
 
 
 
@@ -113,10 +129,35 @@ chat_runnable = primary_prompt | llm_chatbot
 # Define nodes
 
 def chatbot(state: MessagesState):
-    return {"messages": [chat_runnable.invoke(state["messages"])]}
+    print('Im the chatbot')
+    response = chat_runnable.invoke(state["messages"])
+    print(response)
+    print('...........................')
+    response_type = response['parsed'].get('response_type', '')
+    if response_type == 'user_query' or response_type == '':
+        message = response['raw']
+        message.content = response['parsed'].get('query', '')
+        if message.content == '':
+            message.content = response['parsed'].get('contents', '')
+        if message.content == '':
+            message.content = response['parsed'].get('user_query', '')
+        if message.content == '':
+            message.content = response['parsed'].get('content', '')
+        response_type = 'user_query'
+    elif response_type == 'final_response':
+        message = response['raw']
+        message.content = response['parsed'].get('contents', '')   
+        if message.content == '':
+            message.content = response['parsed'].get('content', '') 
+    print(type(message))
+    print(message)
+    print('------------------------------?????-----------------')
+    return {"messages": [message], "type": response_type}
 
 def retriever(state: MessagesState):
-    return {"messages": [runnable_retriever.invoke(state["messages"])]}
+    #print("I'm the retriever")
+    response = runnable_retriever.invoke(state["messages"])
+    return {"messages": [response]}
 
 
 def route_query(
@@ -126,7 +167,9 @@ def route_query(
     Use in the conditional_edge to the info retriever if there is a query. 
     Otherwise, route to the end.
     """
-    print('QUERY ROUTING.........................')
+    #print('QUERY ROUTING.........................')
+    response_type = state.get('type', '')
+    #print(f'response type is {response_type}')
 
     if isinstance(state, list):
         messages = state
@@ -137,23 +180,12 @@ def route_query(
     else:
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
     
-    human_messages = [m for m in messages if isinstance(m, HumanMessage)]
-    ai_messages =  [m for m in messages if isinstance(m, AIMessage)]
 
-    print(human_messages)
-    print()
-    print(ai_messages)
-    last_ai_message = ai_messages[-1]
-    last_human_message = human_messages[-1]
+    if response_type == 'user_query':
+        #print('ROUTING QUERY TO RETRIEVER!.........................')
+        return 'query'
 
-    finish_reason = last_ai_message.response_metadata.get('finish_reason', '')
-
-    if finish_reason == 'stop':
-        if last_human_message.content.strip() == last_ai_message.content.strip():
-            print('Routing user\'s query to info retriever')
-            return 'query'
-
-    print('----------no query to route')
+    #print('----------no query to route, returning to chatbot')
     return "__end__"
 
 
@@ -245,3 +277,4 @@ graph = graph_builder.compile(checkpointer=MemorySaver())
 # inputs = {"messages" : [HumanMessage(content="What is the weather like in Vukovar?")]}
 
 # messages = graph.invoke(inputs, config=config,)
+# print(messages)

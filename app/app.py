@@ -42,19 +42,10 @@ async def main(msg: cl.Message):
        
         kind = event["event"]
         event_name = event.get('name', '')
-        print('-----------------------------')
-        print(f'{kind} -- {event_name}')
-        print()
-        print(event)
-        print()
 
         if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
             response_metadata = event["data"]["chunk"].response_metadata
-            print('......................')
-            print('chatmodelstresm')
-            print(response_metadata)
-
 
             if content:
                 # Empty content in the context of OpenAI means
@@ -89,16 +80,7 @@ async def main(msg: cl.Message):
                     # Add a new line to avoid garbled output of formatted text
                     await agent_message.stream_token(' \n\n')
 
-        # elif kind == 'on_chain_end' and event_name == 'check_helpfulness':
-        #     funct_output = event.get('data', {}).get('output', '')
-        #     if funct_output == 'dispatch_ticket':
-        #         print('---------------------------------- dispatch----------')
-        #         # Message was not helpful. Clear the output
-        #         agent_message.content = ""
-        #         await agent_message.update()
-
         elif kind == 'on_chain_start':
-
             pass
 
                 
