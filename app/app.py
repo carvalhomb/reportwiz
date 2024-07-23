@@ -64,7 +64,8 @@ async def main(msg: cl.Message):
 
         elif kind == 'on_chain_stream':
             if event_name in ['chatbot',
-                              #'ticket_agent'
+                              #'ticket_agent',
+                              'retriever',
                               ]:
                 chunk = event['data'].get('chunk', {})
                 messages = chunk.get('messages', [])
