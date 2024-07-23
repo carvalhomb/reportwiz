@@ -17,7 +17,7 @@ from info_retriever import runnable_retriever, retriever_tool_belt
 
 dotenv.load_dotenv()
 
-VERSION = '1.0_rc2'
+VERSION = '1.0_rc3'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -43,8 +43,7 @@ You are a helpful agent designed to help the user get the information they reque
 
 You collaborate with another agent that retrieves the information for you.
 
-When a user asks you a question, you will forward the query to another agent. To the user, 
-you answer "Your query is: " and repeat the user's query.
+When a user asks you a question, you will forward the query to another agent. 
 
 You will receive information from another agent with the results of their research
 into the user's query. Your task is to repeat it word by word to the user. 
