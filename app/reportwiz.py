@@ -266,13 +266,13 @@ graph = graph_builder.compile(checkpointer=MemorySaver())
 ########################
 # Visualize the graph
 
-graph.get_graph().print_ascii()
-png_graph = graph.get_graph().draw_mermaid_png(
-            draw_method=MermaidDrawMethod.API,
-        )
+# graph.get_graph().print_ascii()
+# png_graph = graph.get_graph().draw_mermaid_png(
+#             draw_method=MermaidDrawMethod.API,
+#         )
 
-graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
-#graph_path = 'graph.png'
-with open(graph_path, 'wb') as png_file:
-    png_file.write(png_graph)
+# graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
+# #graph_path = 'graph.png'
+# with open(graph_path, 'wb') as png_file:
+#     png_file.write(png_graph)
 
