@@ -105,32 +105,17 @@ class SimpleAgentState(MessagesState):
     to allow us to properly route the messages"""
     response_type: str
 
-# class AgentState(TypedDict):
-#     # The input string
-#     input: str
-#     # The list of previous messages in the conversation
-#     chat_history: list[BaseMessage]
-#     # The outcome of a given call to the agent
-#     # Needs `None` as a valid type, since this is what this will start as
-#     agent_outcome: Union[AgentAction, AgentFinish, None]
-#     # List of actions and corresponding observations
-#     # Here we annotate this with `operator.add` to indicate that operations to
-#     # this state should be ADDED to the existing values (not overwrite it)
-#     intermediate_steps: Annotated[list[tuple[AgentAction, str]], operator.add]
-
 
 def chatbot(state: SimpleAgentState):
-    print('Im the chatbot')
-    print(state)
     last_message = state['messages'][-1]
     current_response_type = state['response_type']
 
     # Update the current response type if needed
     if isinstance(last_message, HumanMessage):
-        print('this is a user query')
+        # This is a user query
         current_response_type = 'user_query'
     elif isinstance(last_message, AIMessage):
-        print('this is an agent response')
+        # This is an agent's response
         current_response_type = 'agent_response'
     
     invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
@@ -139,15 +124,10 @@ def chatbot(state: SimpleAgentState):
     return output
 
 def retriever(state: SimpleAgentState):
-    print("I'm the retriever")
-
     # If this is a user query, drop the last agent message and run the 
     # chain on the remaining messages
-
     response = runnable_retriever.invoke(state["messages"])
     output = {'messages': [response], 'response_type': 'agent_response'}
-    print('retriever output:')
-    print(output)
     return output
 
 
@@ -158,25 +138,23 @@ def route_query(
     Use in the conditional_edge to the info retriever if there is a query. 
     Otherwise, route to the end.
     """
-    print('QUERY ROUTING.........................')
     response_type = state.get('response_type')
-    print(f'response type is {response_type}')
-
-    if isinstance(state, list):
-        messages = state
-        #ai_message = state[-1]
-    elif isinstance(state, dict):
-        messages = state.get("messages", [])
-        #ai_message = messages[-1]
-    else:
-        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
+    # if isinstance(state, list):
+    #     messages = state
+    #     #ai_message = state[-1]
+    # elif isinstance(state, dict):
+    #     messages = state.get("messages", [])
+    #     #ai_message = messages[-1]
+    # else:
+    #     raise ValueError(f"No messages found in input state to tool_edge: {state}")
     
 
     if response_type == 'user_query':
-        print('ROUTING QUERY TO RETRIEVER!.........................')
+        # Routing to the query retriever
         return 'query'
 
-    print('----------no query to route, returning to chatbot')
+    # Otherwise, go back to the chatbot
     return "__end__"
 
 
@@ -259,13 +237,3 @@ graph = graph_builder.compile(checkpointer=MemorySaver())
 # with open(graph_path, 'wb') as png_file:
 #     png_file.write(png_graph)
 
-
-
-# import uuid
-# conversation_id = str(uuid.uuid4())
-# config = {"configurable": {"thread_id": conversation_id}}
-
-# inputs = {"messages" : [HumanMessage(content="What is the weather like in Vukovar?")]}
-
-# messages = graph.invoke(inputs, config=config,)
-# print(messages)
