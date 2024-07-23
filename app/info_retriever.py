@@ -78,8 +78,9 @@ retriever_tool_belt = tools + [pdf_retriever]
 prompt = f"""
 You are a helpful agent designed to help the user get useful information 
 about solar panels and weather in Croatia. You only provide information that you can
-find in your data sources. When the user asks you for information that you
-don't have access to, you MUST answer with: 'No information found'.
+find in your data sources. You MUST ALWAYS cite your sources. 
+
+When the user asks you for information that you don't have access to, you MUST answer with: 'No information found'.
 
 You have access to two data sources:
 

@@ -42,16 +42,20 @@ async def main(msg: cl.Message):
        
         kind = event["event"]
         event_name = event.get('name', '')
-        # print('-----------------------------')
-        # print(f'{kind} -- {event_name}')
-        # print()
-        # print(event)
-        # print()
+        print('-----------------------------')
+        print(f'{kind} -- {event_name}')
+        print()
+        print(event)
+        print()
 
         if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
             response_metadata = event["data"]["chunk"].response_metadata
-            
+            print('......................')
+            print('chatmodelstresm')
+            print(response_metadata)
+
+
             if content:
                 # Empty content in the context of OpenAI means
                 # that the model is asking for a tool to be invoked.
@@ -65,7 +69,7 @@ async def main(msg: cl.Message):
         elif kind == 'on_chain_stream':
             if event_name in ['chatbot',
                               #'ticket_agent',
-                              'retriever',
+                              #'retriever',
                               ]:
                 chunk = event['data'].get('chunk', {})
                 messages = chunk.get('messages', [])
@@ -73,7 +77,8 @@ async def main(msg: cl.Message):
                 content = last_message.content
                 reason = ''
                 try:
-                    response_metadata = chunk.response_metadata
+                    #response_metadata = chunk.response_metadata
+                    response_metadata = last_message.response_metadata
                     reason = response_metadata.get('finish_reason', '')
                 except Exception as e:
                     pass
@@ -82,7 +87,7 @@ async def main(msg: cl.Message):
                     await agent_message.stream_token(content)
                 if reason == 'stop':
                     # Add a new line to avoid garbled output of formatted text
-                    await agent_message.stream_token(' \n')
+                    await agent_message.stream_token(' \n\n')
 
         # elif kind == 'on_chain_end' and event_name == 'check_helpfulness':
         #     funct_output = event.get('data', {}).get('output', '')
