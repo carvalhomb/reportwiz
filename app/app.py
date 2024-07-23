@@ -39,9 +39,11 @@ async def main(msg: cl.Message):
                                             version="v2",
                                             config=config,
                                             ):
-       
+
+        print('-----------------------------')
         kind = event["event"]
         event_name = event.get('name', '')
+        print(f'kind: {kind} - {event_name}')
 
         if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
@@ -58,6 +60,9 @@ async def main(msg: cl.Message):
                 await agent_message.stream_token(' \n')
 
         elif kind == 'on_chain_stream':
+            print('....................')
+            print(event)
+
             if event_name in ['chatbot',
                               #'ticket_agent',
                               #'retriever',

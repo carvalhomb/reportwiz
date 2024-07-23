@@ -1,15 +1,13 @@
 import os
 import dotenv
+import operator
+from typing import Annotated, TypedDict, Union, Literal
 
 import json
 import pprint
 
 
 from langchain_openai import AzureChatOpenAI
-from typing import Annotated, Literal
-from typing_extensions import TypedDict
-
-
 
 from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.graph.message import add_messages
@@ -17,6 +15,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, ToolMessage, AnyMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.agents import AgentAction, AgentFinish
 
 from langchain_core.output_parsers import StrOutputParser
 
@@ -59,58 +58,31 @@ llm_chatbot = AzureChatOpenAI(
 ################################################
 # CREATE THE GRAPH MANUALLY
 
-# json_format = """
-# {{
-#     'project': {{'id': 123}},
-#     'summary': USER'S QUERY',
-#     'description': summary of the user's query,
-#     'issuetype': {{'name': 'Report'}},
-# }}
-# """
-
-json_schema = {
-    "title": "response",
-    "description": "Chatbot response",
-    "type": "object",
-    "properties": {
-        "contents": {
-            "type": "string",
-            "description": "The model's response or the original user query",
-        },
-        "response_type": {
-            "type": "string",
-            "description": "whether final_response or user_query",
-        },
-    },
-    "required": ["response_type"],
-}
-
 main_prompt = """
 You are a helpful agent designed to help the user get the information they requested.
 
 You collaborate with another agent that retrieves the information for you.
 
-When a user asks you a question, you create a JSON response with response_type = user_query, 
-which will be forwarded to another agent.
+When a user asks you a question, you will forward the query to another agent. To the user, 
+you answer "Your query is: " and repeat the user's query.
 
-When you receive an answer, classify it as response_type = final_response and repeat it
-word by word to the user. 
-                               
+When you receive an answer from the other agent, repeat it word by word to the user. 
+
+If the other agent answers "No information found", you MUST apologize to the user.
+Then, you will create a well-formatted JSON request to be forwarded to the Business Analytics department. 
+
+The request should be in the following json format:
+
+{{
+    'project': {{'id': 123}},
+    'summary': USER'S QUERY',
+    'description': summary of the user's query,
+    'issuetype': {{'name': 'Report'}},
+}}
+
+You will tell the user they can use the JSON request above to make their request to the Business Analytics
+department.
 """
-
-
-
-# continue_prompt = """
-# However, if the other agent cannot find the information, you MUST apologize to the user.
-# Then, you will create a well-formatted JSON request to be forwarded to the Business Analytics department. 
-
-# The request should be in the following json format:
-
-# {json_format}
-
-# You will tell the user they can use the JSON request above to make their request to the Business Analytics
-# department.
-# """
 
 # Create a chain with the main prompt
 primary_prompt = ChatPromptTemplate.from_messages(
@@ -121,55 +93,74 @@ primary_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
-chat_runnable = primary_prompt | llm_chatbot.with_structured_output(json_schema, method='json_mode', include_raw=True)
+chat_runnable = primary_prompt | llm_chatbot
 
 
 
 #----------------------------------------
 # Define nodes
 
-def chatbot(state: MessagesState):
-    print('Im the chatbot')
-    response = chat_runnable.invoke(state["messages"])
-    print(response)
-    print('...........................')
-    response_type = response['parsed'].get('response_type', '')
-    if response_type == 'user_query' or response_type == '':
-        message = response['raw']
-        message.content = response['parsed'].get('query', '')
-        if message.content == '':
-            message.content = response['parsed'].get('contents', '')
-        if message.content == '':
-            message.content = response['parsed'].get('user_query', '')
-        if message.content == '':
-            message.content = response['parsed'].get('content', '')
-        response_type = 'user_query'
-    elif response_type == 'final_response':
-        message = response['raw']
-        message.content = response['parsed'].get('contents', '')   
-        if message.content == '':
-            message.content = response['parsed'].get('content', '') 
-    print(type(message))
-    print(message)
-    print('------------------------------?????-----------------')
-    return {"messages": [message], "type": response_type}
+class SimpleAgentState(MessagesState):
+    """Extends the default MessagesState to add a current answer type 
+    to allow us to properly route the messages"""
+    response_type: str
 
-def retriever(state: MessagesState):
-    #print("I'm the retriever")
+# class AgentState(TypedDict):
+#     # The input string
+#     input: str
+#     # The list of previous messages in the conversation
+#     chat_history: list[BaseMessage]
+#     # The outcome of a given call to the agent
+#     # Needs `None` as a valid type, since this is what this will start as
+#     agent_outcome: Union[AgentAction, AgentFinish, None]
+#     # List of actions and corresponding observations
+#     # Here we annotate this with `operator.add` to indicate that operations to
+#     # this state should be ADDED to the existing values (not overwrite it)
+#     intermediate_steps: Annotated[list[tuple[AgentAction, str]], operator.add]
+
+
+def chatbot(state: SimpleAgentState):
+    print('Im the chatbot')
+    print(state)
+    last_message = state['messages'][-1]
+    current_response_type = state['response_type']
+
+    # Update the current response type if needed
+    if isinstance(last_message, HumanMessage):
+        print('this is a user query')
+        current_response_type = 'user_query'
+    elif isinstance(last_message, AIMessage):
+        print('this is an agent response')
+        current_response_type = 'agent_response'
+    
+    invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
+    response = chat_runnable.invoke(invoke_input)
+    output = {'messages': [response], 'response_type': current_response_type}
+    return output
+
+def retriever(state: SimpleAgentState):
+    print("I'm the retriever")
+
+    # If this is a user query, drop the last agent message and run the 
+    # chain on the remaining messages
+
     response = runnable_retriever.invoke(state["messages"])
-    return {"messages": [response]}
+    output = {'messages': [response], 'response_type': 'agent_response'}
+    print('retriever output:')
+    print(output)
+    return output
 
 
 def route_query(
-    state: MessagesState,
+    state: SimpleAgentState,
 ) -> Literal["retriever", "__end__"]:
     """
     Use in the conditional_edge to the info retriever if there is a query. 
     Otherwise, route to the end.
     """
-    #print('QUERY ROUTING.........................')
-    response_type = state.get('type', '')
-    #print(f'response type is {response_type}')
+    print('QUERY ROUTING.........................')
+    response_type = state.get('response_type')
+    print(f'response type is {response_type}')
 
     if isinstance(state, list):
         messages = state
@@ -182,16 +173,16 @@ def route_query(
     
 
     if response_type == 'user_query':
-        #print('ROUTING QUERY TO RETRIEVER!.........................')
+        print('ROUTING QUERY TO RETRIEVER!.........................')
         return 'query'
 
-    #print('----------no query to route, returning to chatbot')
+    print('----------no query to route, returning to chatbot')
     return "__end__"
 
 
 
 def route_tools(
-    state: MessagesState,
+    state: SimpleAgentState,
 ) -> Literal["tools", "done"]:
     """
     Use in the conditional_edge to route to the ToolNode if the last message
@@ -213,7 +204,7 @@ retriever_tool_node = ToolNode(tools=retriever_tool_belt)
 # Build the graph, connecting the edges
 
 # Start the graph
-graph_builder = StateGraph(MessagesState)
+graph_builder = StateGraph(SimpleAgentState)
 
 # Add the nodes
 graph_builder.add_node("chatbot", chatbot)
