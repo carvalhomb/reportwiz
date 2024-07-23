@@ -38,7 +38,7 @@ from info_retriever import runnable_retriever, retriever_tool_belt
 
 dotenv.load_dotenv()
 
-VERSION = '0.7.2'
+VERSION = '1.0_rc1'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
