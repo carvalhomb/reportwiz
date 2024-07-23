@@ -55,8 +55,9 @@ llm_chatbot = AzureChatOpenAI(
 )
 
 
-################################################
-# CREATE THE GRAPH MANUALLY
+#################################################################################
+# RUNNABLE CHAINS
+# Create our runnable chains, depending on the prompt we want to pass forward
 
 main_prompt = """
 You are a helpful agent designed to help the user get the information they requested.
@@ -71,8 +72,6 @@ into the user's query. Your task is to repeat it word by word to the user.
 Do not summarize the other agent's answer. 
 
 You MUST cite your source documents.
-
-
 """
 
 # Create a chain with the main prompt
@@ -86,7 +85,7 @@ main_prompt_template = ChatPromptTemplate.from_messages(
 )
 chat_runnable = main_prompt_template | llm_chatbot
 
-
+# ----------------------------------------------------------------
 # Create a second chain with the prompt that tells the chatbot
 # to route the query to the ticket creation
 
@@ -117,17 +116,21 @@ ticketing_prompt_template  = ChatPromptTemplate.from_messages(
     ]
 )
 
-
 ticketing_runnable = ticketing_prompt_template | llm_chatbot
 
-#----------------------------------------
-# Define nodes
+#################################################################################
+# MANUALLY CREATE OUR GRAPH
+
+#------------------------------------
+# We need a custom state
 
 class SimpleAgentState(MessagesState):
     """Extends the default MessagesState to add a current answer type 
     to allow us to properly route the messages"""
     response_type: str
 
+#------------------------------------
+# Defining our nodes
 
 def chatbot(state: SimpleAgentState):
     last_message = state['messages'][-1]
@@ -151,37 +154,32 @@ def chatbot(state: SimpleAgentState):
 
 
 def ticketing_bot(state: SimpleAgentState):
-    print("I'm the ticketing bot!")
-    #last_message = state['messages'][-1]
-    current_response_type = state['response_type']
-
-    invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
+    #current_response_type = state.get('response_type')
+    
+    # We manually set response_type to no_answer to invoke the chain
+    invoke_input = {'messages': state['messages'], 'response_type': 'no_answer'}
 
     response = ticketing_runnable.invoke(invoke_input)
-    output = {'messages': [response], 'response_type': current_response_type}
+
+    # After we get the response, we manually set response_type to "ticket_generated"
+    output = {'messages': [response], 'response_type': 'ticket_generated'}
     return output
 
 
 
 def retriever(state: SimpleAgentState):
-    print('....................................................')
-    print('Im the retriever')
     # Run a retrieval query on the conversation state
     response = runnable_retriever.invoke(state["messages"])
-    print('This is the response I got: ')
-    print(response)
-    print('....................................................')
-
     current_response_type = state.get('response_type')
-
-    # Check if the retriever chain did not find an answer
-    if 'no information found' in response.content.lower():
-        print('Agent didnt find answer')
-        current_response_type = 'no_answer'
 
     output = {'messages': [response], 'response_type': current_response_type}
     return output
 
+# For the retriever tool node we use the inbuilt ToolNode
+retriever_tool_node = ToolNode(tools=retriever_tool_belt)
+
+#------------------------------------
+# Defining our routing functions
 
 def route_query(
     state: SimpleAgentState,
@@ -191,16 +189,6 @@ def route_query(
     Otherwise, route to the end.
     """
     response_type = state.get('response_type')
-    
-    # if isinstance(state, list):
-    #     messages = state
-    #     #ai_message = state[-1]
-    # elif isinstance(state, dict):
-    #     messages = state.get("messages", [])
-    #     #ai_message = messages[-1]
-    # else:
-    #     raise ValueError(f"No messages found in input state to tool_edge: {state}")
-    
 
     if response_type == 'user_query':
         # Routing to the query retriever
@@ -210,13 +198,14 @@ def route_query(
     return "__end__"
 
 
-
 def route_tools(
     state: SimpleAgentState,
 ) -> Literal["tools", "success", "no_answer"]:
     """
     Use in the conditional_edge to route to the ToolNode if the last message
-    has tool calls. Otherwise, route to the end.
+    has tool calls. Otherwise, we check if the retriever found the information
+    requested. If yes, we route to the end. Otherwise, we send the request
+    to the ticketing bot.
     """
     if isinstance(state, list):
         ai_message = state[-1]
@@ -229,15 +218,13 @@ def route_tools(
 
     # Check if we couldn't find an answer
     if 'no information found' in ai_message.content.lower():
-        print('Retriever didnt find answer')
         return "no_answer"
 
     return "success"
 
-retriever_tool_node = ToolNode(tools=retriever_tool_belt)
 
 #----------------------------------------
-# Build the graph, connecting the edges
+# Build the graph and connect the edges
 
 # Start the graph
 graph_builder = StateGraph(SimpleAgentState)
@@ -248,44 +235,31 @@ graph_builder.add_node("retriever", retriever)
 graph_builder.add_node("retriever_tools", retriever_tool_node)
 graph_builder.add_node("ticketing_bot", ticketing_bot)
 
-
-
 # Add the edges
 graph_builder.add_edge(START, "chatbot")
-
 
 
 graph_builder.add_conditional_edges(
     "chatbot",
     route_query,
-    # The following dictionary lets you tell the graph to interpret the condition's outputs as a specific node
-    # It defaults to the identity function, but if you
-    # want to use a node named something else apart from "tools",
-    # You can update the value of the dictionary to something else
-    # e.g., "tools": "my_tools"
     {"query": "retriever", "__end__": "__end__"},
 )
 
-# The `tools_condition` function returns "tools" if the chatbot asks to use a tool, and "__end__" if
-# it is fine directly responding. This conditional routing defines the main agent loop.
 graph_builder.add_conditional_edges(
     "retriever",
     route_tools,
-    # The following dictionary lets you tell the graph to interpret the condition's outputs as a specific node
-    # It defaults to the identity function, but if you
-    # want to use a node named something else apart from "tools",
-    # You can update the value of the dictionary to something else
-    # e.g., "tools": "my_tools"
     {"tools": "retriever_tools", "success": "chatbot", "no_answer": "ticketing_bot"},
 )
 
 # Any time a tool is called, we return to the retriever to decide the next step
 graph_builder.add_edge("retriever_tools", "retriever")
 
+# The ticketing bot goes directly to the end
 graph_builder.add_edge("ticketing_bot", END)
 
-
-# Add memory to the agent using a checkpointer
+#----------------------------------------
+# Compile!
+# Also, we add memory to the agent using a checkpointer
 graph = graph_builder.compile(checkpointer=MemorySaver())
 
 

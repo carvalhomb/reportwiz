@@ -42,12 +42,6 @@ async def main(msg: cl.Message):
 
         kind = event["event"]
         event_name = event.get('name', '')
-        # print('.................')
-        # print(f'{kind} - {event_name}')
-        # print('event: ')
-        # print(event)
-        # print('.............+++++++++++++++++++.......................')
-
 
         if kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
