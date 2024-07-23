@@ -2,35 +2,13 @@
 import os
 import dotenv
 
-import json
-
-
-
 from langchain_openai import AzureChatOpenAI
-from typing import Annotated, Literal
-from typing_extensions import TypedDict
 
 
-
-from langgraph.graph import StateGraph, MessagesState, START, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
-from langchain_core.tools import tool
-from langchain_core.messages import SystemMessage, ToolMessage, AnyMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-from langgraph.checkpoint import MemorySaver
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-
-from langchain_core.runnables.graph import MermaidDrawMethod
-
-from typing import List
-from enum import Enum
-
-from langchain_core.pydantic_v1 import BaseModel, Field
 
 
 from pdf_retriever import pdf_retriever
@@ -76,11 +54,14 @@ retriever_tool_belt = tools + [pdf_retriever]
 
 
 prompt = f"""
-You are a helpful agent designed to help the user get useful information 
+You are a helpful and extremely thorough agent designed to help the user get useful information 
 about solar panels and weather in Croatia. You only provide information that you can
-find in your data sources. You MUST ALWAYS cite your sources. 
+find in your data sources.
 
-When the user asks you for information that you don't have access to, you MUST answer with: 'No information found'.
+You MUST ALWAYS cite your sources. 
+
+When the user asks you for information that you don't have access to, 
+you MUST answer with: 'No information found'.
 
 You have access to two data sources:
 
@@ -120,6 +101,10 @@ Then you should query the schema of the most relevant tables.
 
 If you can't find an answer in the reports repository or in the database, you MUST answer with: 'No information found'.
 If the user asks you to generate any plots or reports, you MUST answer with: 'No information found'.
+If you query the database and find no records, you MUST answer with: 'No information found'.
+
+If the user asks for information that is not related to weather and solar panels in Croatia, 
+you MUST answer with: 'No information found'.
 
 """
 

@@ -1,36 +1,15 @@
 import os
 import dotenv
-import operator
-from typing import Annotated, TypedDict, Union, Literal
-
-import json
-import pprint
-
+from typing import Literal
 
 from langchain_openai import AzureChatOpenAI
 
 from langgraph.graph import StateGraph, MessagesState, START, END
-from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langchain_core.tools import tool
-from langchain_core.messages import SystemMessage, ToolMessage, AnyMessage, HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
-from langchain_core.agents import AgentAction, AgentFinish
-
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from langgraph.checkpoint import MemorySaver
-
-from langchain_community.utilities import SQLDatabase
-from langchain_community.agent_toolkits import SQLDatabaseToolkit
-
-from langchain_core.runnables.graph import MermaidDrawMethod
-
-from typing import List
-from enum import Enum
-
-from langchain_core.pydantic_v1 import BaseModel, Field
-
 
 
 from info_retriever import runnable_retriever, retriever_tool_belt
@@ -38,7 +17,7 @@ from info_retriever import runnable_retriever, retriever_tool_belt
 
 dotenv.load_dotenv()
 
-VERSION = '1.0_rc1'
+VERSION = '1.0_rc2'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -262,17 +241,4 @@ graph_builder.add_edge("ticketing_bot", END)
 # Also, we add memory to the agent using a checkpointer
 graph = graph_builder.compile(checkpointer=MemorySaver())
 
-
-########################
-# Visualize the graph
-
-# graph.get_graph().print_ascii()
-# png_graph = graph.get_graph().draw_mermaid_png(
-#             draw_method=MermaidDrawMethod.API,
-#         )
-
-# graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
-# #graph_path = 'graph.png'
-# with open(graph_path, 'wb') as png_file:
-#     png_file.write(png_graph)
 
