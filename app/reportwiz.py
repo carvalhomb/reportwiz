@@ -38,7 +38,7 @@ from info_retriever import runnable_retriever, retriever_tool_belt
 
 dotenv.load_dotenv()
 
-VERSION = '0.7.1'
+VERSION = '0.7.2'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -66,26 +66,17 @@ You collaborate with another agent that retrieves the information for you.
 When a user asks you a question, you will forward the query to another agent. To the user, 
 you answer "Your query is: " and repeat the user's query.
 
-When you receive an answer from the other agent, repeat it word by word to the user. 
+You will receive information from another agent with the results of their research
+into the user's query. Your task is to repeat it word by word to the user. 
+Do not summarize the other agent's answer. 
 
-If the other agent answers "No information found", you MUST apologize to the user.
-Then, you will create a well-formatted JSON request to be forwarded to the Business Analytics department. 
+You MUST cite your source documents.
 
-The request should be in the following json format:
 
-{{
-    'project': {{'id': 123}},
-    'summary': USER'S QUERY',
-    'description': summary of the user's query,
-    'issuetype': {{'name': 'Report'}},
-}}
-
-You will tell the user they can use the JSON request above to make their request to the Business Analytics
-department.
 """
 
 # Create a chain with the main prompt
-primary_prompt = ChatPromptTemplate.from_messages(
+main_prompt_template = ChatPromptTemplate.from_messages(
     [
         (
             "system", main_prompt
@@ -93,9 +84,41 @@ primary_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
-chat_runnable = primary_prompt | llm_chatbot
+chat_runnable = main_prompt_template | llm_chatbot
 
 
+# Create a second chain with the prompt that tells the chatbot
+# to route the query to the ticket creation
+
+ticketing_prompt = """
+                You are a helpful agent who helps the user send requests to the Business Analytics department.
+                You are called only when the system was unable to find the user's requested information.
+
+                Your task is, first, to apologize to the user.
+                Then, you will take the user's query and create a well-formatted JSON request.
+                The request should be in the following json format:
+
+                {{
+                    'project': {{'id': 123}},
+                    'summary': USER'S QUERY',
+                    'description': summary of the user's query,
+                    'issuetype': {{'name': 'Report'}},
+                }}
+
+                You will tell the user they can use the JSON request above to make their request to the Business Analytics
+                department.
+            """     
+ticketing_prompt_template  = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system", ticketing_prompt
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+
+
+ticketing_runnable = ticketing_prompt_template | llm_chatbot
 
 #----------------------------------------
 # Define nodes
@@ -114,14 +137,29 @@ def chatbot(state: SimpleAgentState):
     if isinstance(last_message, HumanMessage):
         # This is a user query
         current_response_type = 'user_query'
+
     elif isinstance(last_message, AIMessage):
         # This is an agent's response
         current_response_type = 'agent_response'
-    
+
     invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
-    response = chat_runnable.invoke(invoke_input)
+
+    if current_response_type == 'agent_response':
+        # Let's check if the agent response was "No information found"
+        if 'no information found' in last_message.content.lower():
+            print('Agent didnt find answer')
+            invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
+
+            response = ticketing_runnable.invoke(invoke_input)
+        else:
+            response = chat_runnable.invoke(invoke_input)
+
+    else:
+        response = chat_runnable.invoke(invoke_input)
+
     output = {'messages': [response], 'response_type': current_response_type}
     return output
+
 
 def retriever(state: SimpleAgentState):
     # If this is a user query, drop the last agent message and run the 
