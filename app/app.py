@@ -42,11 +42,11 @@ async def main(msg: cl.Message):
 
         kind = event["event"]
         event_name = event.get('name', '')
-        print('.................')
-        print(f'{kind} - {event_name}')
-        print('event: ')
-        print(event)
-        print('.............+++++++++++++++++++.......................')
+        # print('.................')
+        # print(f'{kind} - {event_name}')
+        # print('event: ')
+        # print(event)
+        # print('.............+++++++++++++++++++.......................')
 
 
         if kind == "on_chat_model_stream":
@@ -66,7 +66,7 @@ async def main(msg: cl.Message):
         elif kind == 'on_chain_stream':
 
             if event_name in ['chatbot',
-                              #'ticket_agent',
+                              'ticketing_bot',
                               #'retriever',
                               ]:
                 chunk = event['data'].get('chunk', {})

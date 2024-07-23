@@ -94,7 +94,7 @@ ticketing_prompt = """
                 You are a helpful agent who helps the user send requests to the Business Analytics department.
                 You are called only when the system was unable to find the user's requested information.
 
-                Your task is, first, to apologize to the user.
+                Your task is, first, to apologize to the user for not finding the information.
                 Then, you will take the user's query and create a well-formatted JSON request.
                 The request should be in the following json format:
 
@@ -137,35 +137,49 @@ def chatbot(state: SimpleAgentState):
     if isinstance(last_message, HumanMessage):
         # This is a user query
         current_response_type = 'user_query'
-
     elif isinstance(last_message, AIMessage):
         # This is an agent's response
         current_response_type = 'agent_response'
 
     invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
 
-    if current_response_type == 'agent_response':
-        # Let's check if the agent response was "No information found"
-        if 'no information found' in last_message.content.lower():
-            print('Agent didnt find answer')
-            invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
+    response = chat_runnable.invoke(invoke_input)
 
-            response = ticketing_runnable.invoke(invoke_input)
-        else:
-            response = chat_runnable.invoke(invoke_input)
-
-    else:
-        response = chat_runnable.invoke(invoke_input)
-
+    # Return an update to the state with the latest response
     output = {'messages': [response], 'response_type': current_response_type}
     return output
 
 
+def ticketing_bot(state: SimpleAgentState):
+    print("I'm the ticketing bot!")
+    #last_message = state['messages'][-1]
+    current_response_type = state['response_type']
+
+    invoke_input = {'messages': state['messages'], 'response_type': current_response_type}
+
+    response = ticketing_runnable.invoke(invoke_input)
+    output = {'messages': [response], 'response_type': current_response_type}
+    return output
+
+
+
 def retriever(state: SimpleAgentState):
-    # If this is a user query, drop the last agent message and run the 
-    # chain on the remaining messages
+    print('....................................................')
+    print('Im the retriever')
+    # Run a retrieval query on the conversation state
     response = runnable_retriever.invoke(state["messages"])
-    output = {'messages': [response], 'response_type': 'agent_response'}
+    print('This is the response I got: ')
+    print(response)
+    print('....................................................')
+
+    current_response_type = state.get('response_type')
+
+    # Check if the retriever chain did not find an answer
+    if 'no information found' in response.content.lower():
+        print('Agent didnt find answer')
+        current_response_type = 'no_answer'
+
+    output = {'messages': [response], 'response_type': current_response_type}
     return output
 
 
@@ -192,14 +206,14 @@ def route_query(
         # Routing to the query retriever
         return 'query'
 
-    # Otherwise, go back to the chatbot
+    # Otherwise, go to the end
     return "__end__"
 
 
 
 def route_tools(
     state: SimpleAgentState,
-) -> Literal["tools", "done"]:
+) -> Literal["tools", "success", "no_answer"]:
     """
     Use in the conditional_edge to route to the ToolNode if the last message
     has tool calls. Otherwise, route to the end.
@@ -212,7 +226,13 @@ def route_tools(
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
     if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
         return "tools"
-    return "done"
+
+    # Check if we couldn't find an answer
+    if 'no information found' in ai_message.content.lower():
+        print('Retriever didnt find answer')
+        return "no_answer"
+
+    return "success"
 
 retriever_tool_node = ToolNode(tools=retriever_tool_belt)
 
@@ -226,9 +246,14 @@ graph_builder = StateGraph(SimpleAgentState)
 graph_builder.add_node("chatbot", chatbot)
 graph_builder.add_node("retriever", retriever)
 graph_builder.add_node("retriever_tools", retriever_tool_node)
+graph_builder.add_node("ticketing_bot", ticketing_bot)
+
+
 
 # Add the edges
 graph_builder.add_edge(START, "chatbot")
+
+
 
 graph_builder.add_conditional_edges(
     "chatbot",
@@ -251,11 +276,13 @@ graph_builder.add_conditional_edges(
     # want to use a node named something else apart from "tools",
     # You can update the value of the dictionary to something else
     # e.g., "tools": "my_tools"
-    {"tools": "retriever_tools", "done": "chatbot"},
+    {"tools": "retriever_tools", "success": "chatbot", "no_answer": "ticketing_bot"},
 )
 
 # Any time a tool is called, we return to the retriever to decide the next step
 graph_builder.add_edge("retriever_tools", "retriever")
+
+graph_builder.add_edge("ticketing_bot", END)
 
 
 # Add memory to the agent using a checkpointer
@@ -265,13 +292,13 @@ graph = graph_builder.compile(checkpointer=MemorySaver())
 ########################
 # Visualize the graph
 
-# graph.get_graph().print_ascii()
-# png_graph = graph.get_graph().draw_mermaid_png(
-#             draw_method=MermaidDrawMethod.API,
-#         )
+graph.get_graph().print_ascii()
+png_graph = graph.get_graph().draw_mermaid_png(
+            draw_method=MermaidDrawMethod.API,
+        )
 
-# graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
-# #graph_path = 'graph.png'
-# with open(graph_path, 'wb') as png_file:
-#     png_file.write(png_graph)
+graph_path = '/mnt/c/Users/mbrandao/Downloads/graph.png'
+#graph_path = 'graph.png'
+with open(graph_path, 'wb') as png_file:
+    png_file.write(png_graph)
 
