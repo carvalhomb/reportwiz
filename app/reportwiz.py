@@ -37,7 +37,7 @@ from retrieval import pdf_retriever
 
 dotenv.load_dotenv()
 
-VERSION = '0.6'
+VERSION = '0.6.1'
 os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGCHAIN_PROJECT"] + f" - v. {VERSION}"
 
 
@@ -75,12 +75,12 @@ tools = toolkit.get_tools()
 
 
 @tool
-def check_helpfulness(input):
+def check_helpfulness(initial_query, final_response):
     """
-    Check whether an answer is helpful or not, given a user's initial query.
+    Given a user's initial query, check whether your answer is helpful or not.
     """
-    initial_query = input["initial_query"]
-    final_response = input["final_response"]
+    #initial_query = input["initial_query"]
+    #final_response = input["final_response"]
 
 
     helpfulness_prompt_template = """\
@@ -203,8 +203,6 @@ prompt = f"""
 You are a helpful agent.
 
 After you generate a final response to the user, you MUST check whether your answer is helpful or not before sending it to the user.
-Call the helpfulness checker tool with the following JSON format:
-{helpfulness_json}
 
 If the answer is not helpful, you should say "BUAAAAAA". If your answer is helpful, you should say "I'm the BEST!"
 """
