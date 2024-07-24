@@ -42,13 +42,14 @@ Once the *Retriever* finishes its look up, it will return its findings to the *C
 
 #### Langgraph graph
 
-As mentioned above, the application is implemented as a LangGraph graph. The representation of the application is as follows:
+As mentioned above, the application is implemented with [LangGraph](https://langchain-ai.github.io/langgraph/). LangGraph is a library for building stateful, multi-actor applications with LLMs, used to create agent and multi-agent workflows. It allows us to better control the flow of the application and offer a better user experience in the interaction with the LLM.
+
+Here is a representation of **ReportWiz** as a graph, with nodes representing the functions that our application performs, and the edges representing the transitions that can happen between these nodes:
 
 ![LangGraph diagram](/reportwiz_graph.png?raw=true "Langgraph nodes")
 
 
-
-### Success
+### Project success
 
 Success for this project means the chatbot can accurately interpret natural language queries, verify if relevant reports, scripts or code already exist, and decide the best outcome. 
 
