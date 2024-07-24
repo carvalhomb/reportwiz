@@ -24,19 +24,29 @@ Our solution to this problem is **ReportWiz**.
 
 - If there is already a report, it points the user to the existing report;
 - If the report does not exist, it generates the required SQL code to give the requested information to the user;
-- If it is not able to generate the query, it gathers all necessary information from the user to create a structured request (i.e. JIRA ticket) that will be dispatched to the business analytics department so that a report can be produced and added to the repository.
+- If it is not able to find the requested information, it creates a structured request (i.e. JIRA ticket) that will be dispatched to the business analytics department so that a report can be produced and added to the repository.
 
 By enabling business users to use natural language to express what they need and retrieve the requested information (in the format of existing reports or SQL queries directly to the database), we can significantly reduce dependency on developers, streamline reporting processes, and improve overall productivity. For the business analytics department, it means less time responding to requests that have already been met and focusing their time in producing new, high quality reports when needed. For the company, it means more agile and responsive operations. For the world, it showcases the potential of AI to make data more accessible. For us, it’s a fulfilling challenge to use AI to bridge the gap between technical and non-technical users.
 
 ### Implementation details
 
-The solution will leverage Retrieval-Augmented Generation (RAG) to retrieve information  from existing reports, scripts and code, and a Large Language Model (LLM) to understand the users' requests in natural language and decide the correct outcome.
+**ReportWiz** is a LangChain-based chatbot that uses OpenAI's GPT-4o chat model in the background to receive and process the user's requests for information. 
 
-The model will have access to a repository of previously generated reports, a schema of the database and sample SQL queries used to produce the types of reports that the business users typically need.
+This is how the application is structured:
 
-It is also relevant to note that we want the chatbot to "fail gracefully", that is, recognize when it is not able to provide responses for simple quests, and then include a human in the loop by gathering necessary details to create a request ticket for the reporting team.
+![Application diagram](/chatbot_white.png?raw=true "Application diagram")
 
-After the first version of the implementation, we will evaluate the need for fine-tuning of embeddings and of the LLM (Large Language Model) on our business data and existing code to improve the accuracy of the chatbot and its relevance to the company's data.
+There is a main *Chatbot* that interacts with the user, taking their requests for information, and forwarding it to a second chat model (the *Retriever*). The *Retriever* has access to a *Toolbox*, which allows it to search for existing reports in PDF format indexed in a *Qdrant Vector Databas*e and to interact with the *Databas*e to search for up to date information.
+
+Once the *Retriever* finishes its look up, it will return its findings to the *Chatbot*, who will relay the information to the user. If, however, the Retriever cannot find the information requested, its response will be routed to the third chatbot, the *Ticketing bot*, who will take care of preparing a structured request for the Business Analytics department that can be inputted in a ticketing system (e.g. JIRA).
+
+#### Langgraph graph
+
+As mentioned above, the application is implemented as a LangGraph graph. The representation of the application is as follows:
+
+![LangGraph diagram](/reportwiz_graph.png?raw=true "Langgraph nodes")
+
+
 
 ### Success
 
@@ -44,6 +54,9 @@ Success for this project means the chatbot can accurately interpret natural lang
 
 The key performance indicator (KPI) will be the reduction in time business departments spend on obtaining necessary information, aiming for a 50% decrease in the average time required for report generation.
 
+## Future work
+
+This Proof-of-concept has been produced using dummy data. However, the hardest part of the application is to do retrieval properly. And for that, we need to test it using real data and evaluate it properly. So, it is in our plans that, after the first version of the implementation, we will evaluate the need for fine-tuning of embeddings and of the LLM (Large Language Model) on our business data and existing code to improve the accuracy of the chatbot and its relevance to the company's data.
 
 ## Sharing
 
